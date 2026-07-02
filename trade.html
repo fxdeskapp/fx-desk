@@ -1310,6 +1310,41 @@
   .cmdk-foot{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--border);color:var(--muted);font-size:11px}
   .cmdk-foot kbd{background:var(--panel-2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-family:"JetBrains Mono",monospace;font-size:10px}
 
+  /* ===== Seans geri sayımı şeridi (Trade paneli) ===== */
+  .sessstrip{flex-shrink:0;display:flex;align-items:center;gap:9px;padding:8px 14px;border-bottom:1px solid var(--border);
+    font-size:12px;cursor:pointer;user-select:none}
+  .sessstrip:hover{background:rgba(255,255,255,.03)}
+  .sessstrip .ss-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+  .sessstrip .ss-cd{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent-2);flex-shrink:0}
+  .sessstrip.ss-hot{background:linear-gradient(90deg,rgba(245,158,11,.10),transparent)}
+  .sessstrip.ss-hot .ss-t{color:var(--gold);font-weight:600}
+  .sessstrip.ss-hot .ss-cd{color:var(--gold)}
+
+  /* ===== Lot cetveli (risk hesaplayıcı) ===== */
+  .rk-tab-t{font-size:11.5px;color:var(--muted);margin:12px 0 6px}
+  .rk-tab{width:100%;border-collapse:collapse;font-size:12.5px;text-align:center}
+  .rk-tab th{color:var(--muted);font-weight:600;padding:5px 4px;border-bottom:1px solid var(--border);font-size:11px}
+  .rk-tab td{padding:7px 4px}
+  .rk-tab td:first-child,.rk-tab th:first-child{text-align:left;color:var(--muted);font-size:11px}
+  .rk-tab b{color:var(--accent)}
+
+  /* ===== Paylaşım şablonu düğmesi ===== */
+  .c-tplbtn{background:var(--panel-2);border:1px solid var(--border);color:var(--muted);padding:7px 12px;border-radius:7px;
+    font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-left:8px;transition:.12s}
+  .c-tplbtn:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* ===== Takvim: güne not düş 📌 ===== */
+  .cal-note{flex-shrink:0;background:none;border:none;cursor:pointer;font-size:12px;line-height:1;padding:3px;border-radius:6px;opacity:.35;transition:.13s}
+  .cal-note:hover{opacity:.9;background:var(--panel-2)}
+  .cal-note.ok{opacity:1;color:var(--green);font-weight:800}
+
+  /* ===== Kısayol rehberi ===== */
+  .kb-tab{width:100%;border-collapse:collapse;font-size:13px}
+  .kb-tab td{padding:7px 4px;border-bottom:1px solid var(--border)}
+  .kb-tab tr:last-child td{border-bottom:none}
+  .kb-tab td:first-child{width:120px;color:var(--muted);white-space:nowrap}
+  .kb-tab kbd{background:var(--panel-2);border:1px solid var(--border);border-radius:5px;padding:2px 7px;font-family:"JetBrains Mono",monospace;font-size:11px}
+
   /* ===== Neon kabuk mobil ===== */
   @media(max-width:820px){
     .sidebar{position:fixed;top:0;left:0;right:0;width:100%;height:auto;flex-direction:row;align-items:center;
@@ -1422,6 +1457,9 @@
     <!-- Sıradaki önemli haber (mini geri sayım — tıkla: takvim) -->
     <div class="nextnews" id="nextnews" style="display:none" title="Ekonomik Takvim'i aç"></div>
 
+    <!-- Seans geri sayımı (tıkla: seans saatleri panelini aç/kapat) -->
+    <div class="sessstrip" id="sessstrip" style="display:none" title="Seans saatleri panelini aç/kapat"></div>
+
     <!-- İşlem Öncesi Kontrol Listesi (disiplin) -->
     <div class="check-box" id="check-box">
       <div class="right-head">
@@ -1512,6 +1550,7 @@
       <div class="compose">
         <div class="compose-row">
           <span class="c-asuser">👤 <b id="c-username">—</b> olarak paylaşıyorsun</span>
+          <button class="c-tplbtn" id="c-template" title="Hazır setup şablonunu doldur: Bias / Giriş / SL / TP / Neden">📋 Şablon</button>
           <div class="bias-pick">
             <button class="bp long" data-b="long">Long</button>
             <button class="bp short" data-b="short">Short</button>
@@ -1926,6 +1965,7 @@
     <label>Enstrüman (1 lot kaç birim)</label>
     <select id="rk-contract"><option value="100000">Forex (1 lot = 100.000 birim)</option><option value="100">Altın XAU (1 lot = 100 oz)</option><option value="1">Kripto (1 lot = 1 coin)</option></select>
     <div class="rk-out" id="rk-out"></div>
+    <div id="rk-table"></div>
     <p class="rk-note">Not: USD karşıtlı pariteler (EUR/USD, XAU/USD, BTC/USD...) için doğru hesaplar. USD/JPY gibi karşıtı USD olmayanlarda yaklaşıktır.</p>
     <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="cancel" id="rk-close">Kapat</button></div>
   </div>
@@ -2360,9 +2400,15 @@ function renderCalendar(){
         <span class="cal-cur-badge">${FLAG[e.cur]||''} ${e.cur}</span>
         ${impBars(e.impact)}
         <span class="cal-title">${esc(e.title)}</span>
+        <button class="cal-note" title="Bu haberi günün notuna ekle (Raporlar › Takvim)">📌</button>
         ${bell}
       </div>
       ${(a||f||p)?`<div class="cal-r2">${a}${f}${p}</div>`:''}`;
+    const nb=row.querySelector('.cal-note');
+    if(nb)nb.addEventListener('click',()=>{
+      const ok=addNewsToDayNote(e);
+      if(ok){nb.textContent='✓';nb.classList.add('ok');setTimeout(()=>{nb.textContent='📌';nb.classList.remove('ok');},1200);}
+    });
     list.appendChild(row);
   });
   list.querySelectorAll('[data-bell]').forEach(b=>b.addEventListener('click',()=>toggleReminder(b.dataset.bell)));
@@ -2382,6 +2428,7 @@ function toggleReminder(k){
 function tickCalendar(){
   checkAlarms();
   if(typeof updateNextNews==='function')updateNextNews();
+  if(typeof updateSessStrip==='function')updateSessStrip();
   const box=document.getElementById('cal-next');
   const now=Date.now();
   const next=calEvents.find(e=>calCur.has(e.cur)&&impAllowed(e.impact)&&e.date.getTime()>now);
@@ -2679,7 +2726,7 @@ function applyFocus(on){
   focusMode=on;
   localStorage.setItem('fxdesk_focus',on?'on':'off');
   const btn=document.getElementById('cm-focus'); if(btn)btn.classList.toggle('active',on);
-  const sb2=document.getElementById('sessions-box'); if(sb2)sb2.style.display=on?'':'none';
+  if(typeof applySessBox==='function')applySessBox();      // seans kutusu: odak modu VEYA şerit tıklaması
   if(on){
     // grafiği EUR/USD'ye çek
     if(typeof activeSym!=='undefined' && typeof loadChart==='function'){
@@ -2697,7 +2744,7 @@ function applyFocus(on){
   }
 }
 document.getElementById('cm-focus').addEventListener('click',()=>applyFocus(!focusMode));
-setInterval(()=>{if(focusMode)renderSessions();},60000);   // seans durumları dakikada bir tazelensin
+setInterval(()=>{if(focusMode||(typeof sessBoxOn==='function'&&sessBoxOn()))renderSessions();},60000);   // seans durumları dakikada bir tazelensin
 if(focusMode)setTimeout(()=>applyFocus(true),800);          // kayıtlı odak modunu geri getir (grafik hazır olunca)
 
 /* ---------- Veri Sözlüğü ---------- */
@@ -5131,12 +5178,22 @@ function riskCalc(){
   const out=document.getElementById('rk-out');
   const riskUsd=bal*rp/100;
   const f=v=>v.toLocaleString('tr-TR',{maximumFractionDigits:2});
-  if(!e||!st||e===st){out.innerHTML='<span class="rk-muted">Risk tutarı: <b>'+f(riskUsd)+' $</b><br>Giriş ve stop gir → lot otomatik hesaplanır.</span>';return;}
+  if(!e||!st||e===st){out.innerHTML='<span class="rk-muted">Risk tutarı: <b>'+f(riskUsd)+' $</b><br>Giriş ve stop gir → lot otomatik hesaplanır.</span>';renderLotTable(riskUsd,cs);return;}
   const dist=Math.abs(e-st);
   const units=dist?riskUsd/dist:0;
   const lot=units/cs;
   const distTxt=parseFloat(dist.toFixed(6)).toString();   // 0.0030000000000001 → 0.003
   out.innerHTML='Risk tutarı: <b>'+f(riskUsd)+' $</b><br>Stop mesafesi: <b>'+distTxt+'</b><br>Pozisyon: <b>'+Math.round(units).toLocaleString('tr-TR')+' birim</b><br>Önerilen lot: <b class="rk-lot">'+lot.toFixed(2)+'</b>';
+  renderLotTable(riskUsd,cs);
+}
+/* Lot cetveli: yaygın stop mesafeleri için hazır lot (forex: 1 pip = 10$/lot, USD karşıtlı) */
+function renderLotTable(riskUsd,cs){
+  const tbl=document.getElementById('rk-table'); if(!tbl)return;
+  if(cs!==100000||!(riskUsd>0)){tbl.innerHTML='';return;}
+  const pips=[5,10,15,20,30,50];
+  tbl.innerHTML='<div class="rk-tab-t">📏 Lot cetveli — stop mesafesine göre hazır lot</div>'
+    +'<table class="rk-tab"><tr><th>Stop</th>'+pips.map(p=>'<th>'+p+' pip</th>').join('')+'</tr>'
+    +'<tr><td>Lot</td>'+pips.map(p=>'<td><b>'+(riskUsd/(p*10)).toFixed(2)+'</b></td>').join('')+'</tr></table>';
 }
 (function(){
   const open=document.getElementById('risk-btn'), m=document.getElementById('risk-modal'), cl=document.getElementById('rk-close');
@@ -5473,6 +5530,132 @@ function updateNextNews(){
 }
 (function(){const nn=document.getElementById('nextnews');if(nn)nn.addEventListener('click',()=>switchTab('calendar'));})();
 
+/* ========== SEANS GERİ SAYIMI ŞERİDİ ==========
+   Overlap açıksa vurgular; değilse açık seansları + en yakın açılış/kapanışı sayar.
+   Tıklayınca Seans Saatleri paneli açılır/kapanır (odak modundan bağımsız). */
+function sessBoxOn(){return localStorage.getItem('fxdesk_sessbox')==='on';}
+function applySessBox(){
+  const b=document.getElementById('sessions-box'); if(!b)return;
+  const show=focusMode||sessBoxOn();
+  b.style.display=show?'':'none';
+  if(show)renderSessions();
+}
+function updateSessStrip(){
+  const box=document.getElementById('sessstrip'); if(!box)return;
+  const ist=new Date(new Date().toLocaleString('en-US',{timeZone:'Europe/Istanbul'}));
+  const h=ist.getHours()+ist.getMinutes()/60+ist.getSeconds()/3600;
+  const fmt=x=>{const tot=Math.max(0,Math.round(x*3600));const hh=Math.floor(tot/3600),mm=Math.floor(tot%3600/60);return (hh>0?hh+'sa ':'')+String(mm).padStart(2,'0')+'dk';};
+  const clean=n=>n.replace(/\s*\(.*\)/,'');
+  const ov=FX_SESSIONS.find(s=>s.hot);
+  let html;
+  if(ov&&h>=ov.s&&h<ov.e){
+    box.classList.add('ss-hot');
+    html='<span>⚡</span><span class="ss-t">Londra–NY overlap AÇIK</span><span class="ss-cd">bitişe '+fmt(ov.e-h)+'</span>';
+  }else{
+    box.classList.remove('ss-hot');
+    let best=null;
+    FX_SESSIONS.forEach(s=>{
+      const nm=s.hot?'⚡ Overlap':clean(s.name);
+      [[s.s,nm+' açılışına'],[s.e,nm+' kapanışına']].forEach(([t,lbl])=>{
+        let d=t-h; if(d<=0)d+=24;
+        if(!best||d<best.d)best={d,lbl};
+      });
+    });
+    const act=FX_SESSIONS.filter(s=>!s.hot&&h>=s.s&&h<s.e).map(s=>clean(s.name));
+    const open=act.length?('Açık: '+act.join(' · ')+'  —  '):'';
+    html='<span>🕐</span><span class="ss-t">'+esc(open+(best?best.lbl:''))+'</span>'+(best?'<span class="ss-cd">'+fmt(best.d)+'</span>':'');
+  }
+  box.style.display='flex'; box.innerHTML=html;
+}
+(function(){
+  const st=document.getElementById('sessstrip');
+  if(st)st.addEventListener('click',()=>{
+    localStorage.setItem('fxdesk_sessbox',sessBoxOn()?'off':'on');
+    applySessBox();
+  });
+  applySessBox(); updateSessStrip();
+})();
+
+/* ========== PAYLAŞIM ŞABLONU ==========
+   Tek tıkla yapılandırılmış setup iskeleti — feed kalitesi standartlaşsın. */
+(function(){
+  const b=document.getElementById('c-template'); if(!b)return;
+  b.addEventListener('click',()=>{
+    const ta=document.getElementById('c-text'); if(!ta)return;
+    const biasTxt=composeBias==='short'?'Short':composeBias==='neutral'?'Nötr':'Long';
+    const tpl='Bias: '+biasTxt+'\nGiriş: \nSL: \nTP: \nNeden: ';
+    if(ta.value.trim()&&!confirm('Metin kutusunda yazı var. Şablon sonuna eklensin mi?'))return;
+    ta.value=ta.value.trim()?ta.value.replace(/\s*$/,'')+'\n\n'+tpl:tpl;
+    ta.focus();
+    const pos=ta.value.lastIndexOf('Giriş: ')+7;
+    try{ta.setSelectionRange(pos,pos);}catch(e){}
+  });
+})();
+
+/* ========== TAKVİMDEN GÜNE NOT DÜŞ (📌) ==========
+   Haberi tek tıkla o günün Günlük Not'una satır olarak ekler (aktif profil). */
+function addNewsToDayNote(e){
+  try{
+    ensureProfiles();
+    const ds=dayKey(e.date);
+    const parts=[];
+    const act=(e.actual!=null&&(''+e.actual).trim()!=='')?(''+e.actual).trim():'';
+    if(act)parts.push('Açıklanan '+act);
+    if(e.forecast)parts.push('beklenti '+e.forecast);
+    if(e.previous)parts.push('önceki '+e.previous);
+    const line='📰 '+fmtTime(e.date)+' '+e.cur+' '+e.title+(parts.length?' — '+parts.join(' · '):'');
+    const notes=getDayNotes(); const cur=notes[ds]||'';
+    if(cur.includes(line))return true;                       // aynı satır iki kez eklenmesin
+    setDayNote(ds,(cur?cur+'\n':'')+line);
+    try{if(document.getElementById('jr-calwrap').style.display!=='none')renderJrCalendar();}catch(_e){}
+    return true;
+  }catch(err){console.warn('daynote',err);return false;}
+}
+
+/* ========== KLAVYE KISAYOLLARI + ? REHBERİ ========== */
+function kbBuild(){
+  if(document.getElementById('kb-modal'))return;
+  const d=document.createElement('div'); d.id='kb-modal'; d.className='modal-bg';
+  d.innerHTML=`<div class="modal" style="width:430px">
+    <h3>⌨️ Klavye Kısayolları</h3>
+    <table class="kb-tab">
+      <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>Komut paleti (her şeyi ara)</td></tr>
+      <tr><td><kbd>T</kbd></td><td>Trade</td></tr>
+      <tr><td><kbd>C</kbd></td><td>Ekonomik Takvim</td></tr>
+      <tr><td><kbd>P</kbd></td><td>Paylaşımlar</td></tr>
+      <tr><td><kbd>R</kbd></td><td>Raporlar</td></tr>
+      <tr><td><kbd>G</kbd></td><td>İşlem Günlüğüm</td></tr>
+      <tr><td><kbd>I</kbd></td><td>İstatistik</td></tr>
+      <tr><td><kbd>N</kbd></td><td>Yeni işlem ekle</td></tr>
+      <tr><td><kbd>F</kbd></td><td>EUR/USD odak modu aç/kapat</td></tr>
+      <tr><td><kbd>H</kbd></td><td>Raporlarda rakamları gizle/göster</td></tr>
+      <tr><td><kbd>?</kbd></td><td>Bu pencere</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Açık pencereyi kapat</td></tr>
+    </table>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="ok" id="kb-close">Tamam</button></div>
+  </div>`;
+  document.body.appendChild(d);
+  d.addEventListener('click',ev=>{if(ev.target===d)d.classList.remove('open');});
+  d.querySelector('#kb-close').addEventListener('click',()=>d.classList.remove('open'));
+}
+function kbToggle(){kbBuild();document.getElementById('kb-modal').classList.toggle('open');}
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  if(!currentUser)return;                                   // giriş ekranında çalışmasın
+  const t=e.target, tag=(t.tagName||'').toLowerCase();
+  if(tag==='input'||tag==='textarea'||tag==='select'||t.isContentEditable)return;   // yazarken karışma
+  const anyOpen=document.querySelector('.modal-bg.open,.jr-modal-bg.open,.cmdk-bg.open,.lightbox.open');
+  if(e.key==='Escape'){if(anyOpen)anyOpen.classList.remove('open');return;}
+  if(e.key==='?'){e.preventDefault();kbToggle();return;}
+  if(anyOpen)return;                                        // modal açıkken sekme kısayolu çalışmasın
+  const k=e.key.toLowerCase();
+  const tabs={t:'trade',c:'calendar',p:'feed',r:'journal',g:'notebook',i:'stats','ı':'stats'};
+  if(tabs[k]){switchTab(tabs[k]);return;}
+  if(k==='n'){switchTab('journal');openTradeModal();return;}
+  if(k==='f'){applyFocus(!focusMode);return;}
+  if(k==='h'){const b=document.getElementById('jr-priv-btn');if(b)b.click();return;}
+});
+
 /* ---------- Sekme geçişi ---------- */
 function switchTab(tab){
   // Güvenlik: Admin sekmesi yalnızca yönetici/moderatöre — doğrudan çağrıya karşı da kilitli
@@ -5670,6 +5853,7 @@ authInit();
     cmds.push({ic:'🌗',l:'Temayı değiştir (koyu/açık)',cat:'Araç',fn:()=>applyTheme(document.body.classList.contains('light')?'dark':'light')});
     cmds.push({ic:'🔄',l:'Ekonomik takvimi yenile',cat:'Araç',fn:()=>loadCalendar()});
     cmds.push({ic:'👁',l:'Raporlarda rakamları gizle/göster',cat:'Araç',fn:()=>{const b=document.getElementById('jr-priv-btn');if(b)b.click();}});
+    cmds.push({ic:'⌨️',l:'Klavye kısayolları (?)',cat:'Araç',fn:()=>{if(typeof kbToggle==='function')kbToggle();}});
     cmds.push({ic:'🚪',l:'Çıkış yap',cat:'Hesap',fn:()=>doLogout()});
     return cmds;
   }
