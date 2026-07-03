@@ -1570,8 +1570,8 @@
           <input id="c-sym" class="sp-other" placeholder="diğer..." autocomplete="off" />
         </div>
         <textarea id="c-text" class="c-area" placeholder="Analizini / bias'ını yaz... (örn. EUR/USD 1.0820 desteğinden 1.0910'a kadar yükseliş bekliyorum)"></textarea>
-        <div class="c-tp" title="Opsiyonel: hedef ve stop girersen, sonradan 'tuttu mu' işaretleyebilir ve isabet oranın birikir">
-          <span class="c-tp-lbl">🎯 Sonuç takibi (opsiyonel):</span>
+        <div class="c-tp" title="Hedef ve stop girersen sonuç OTOMATİK işaretlenir: fiyat TP'ye değerse ✅ tuttu, SL'e değerse ❌ stop (5 dk'da bir kontrol edilir). Metinde 'TP: / SL:' yazarsan da otomatik algılanır.">
+          <span class="c-tp-lbl">🎯 Sonuç takibi — otomatik 🤖 (opsiyonel):</span>
           <input id="c-target" class="c-tp-in" placeholder="Hedef fiyat" autocomplete="off">
           <input id="c-stop" class="c-tp-in" placeholder="Stop fiyat" autocomplete="off">
         </div>
@@ -3083,18 +3083,23 @@ function renderSentiment(){
   box.innerHTML='<div class="senti-head">📊 Topluluk Sentimenti <span class="senti-sub">(paylaşımlara göre)</span></div><div class="senti-grid">'+arr.map(x=>{const lp=Math.round(x.l/x.t*100);return '<div class="senti-item"><div class="senti-top"><b>'+esc(x.sym)+'</b><span>'+x.t+' paylaşım</span></div><div class="senti-bar"><div class="senti-l" style="width:'+lp+'%"></div></div><div class="senti-lbl"><span class="pos">Long %'+lp+'</span><span class="neg">Short %'+(100-lp)+'</span></div></div>';}).join('')+'</div>';
 }
 function outcomeBadge(p){
-  if(p.outcome==='hit')return '<span class="oc-badge hit">✅ Hedef tuttu</span>';
-  if(p.outcome==='miss')return '<span class="oc-badge miss">❌ Stop oldu</span>';
-  if(p.outcome==='open'||(p.target&&!p.outcome))return '<span class="oc-badge open">⏳ Devam ediyor</span>';
+  const auto=p.outcomeAuto?' title="Fiyat verisiyle otomatik işaretlendi 🤖"':'';
+  if(p.outcome==='hit')return '<span class="oc-badge hit"'+auto+'>✅ Hedef tuttu'+(p.outcomeAuto?' 🤖':'')+'</span>';
+  if(p.outcome==='miss')return '<span class="oc-badge miss"'+auto+'>❌ Stop oldu'+(p.outcomeAuto?' 🤖':'')+'</span>';
+  if(p.outcome==='open'||(p.target&&!p.outcome))return '<span class="oc-badge open" title="Hedef/stop girildi — fiyat TP veya SL\'e değince otomatik işaretlenecek">⏳ Devam ediyor</span>';
   return '';
 }
 async function setOutcome(id,oc){
   const p=feed.find(x=>x.id===id); if(!p)return;
   if(!currentUser||p.uid!==currentUser.id)return;   // yalnız sahibi
-  const prev=p.outcome; p.outcome=oc;               // iyimser güncelle
+  const prev=p.outcome; p.outcome=oc; p.outcomeAuto=false;   // manuel işaret otomatiği geçersiz kılar
   if(!DEMO){
     let error=null;
-    try{const r=await sb.from('posts').update({outcome:oc}).eq('id',id);error=r.error;}catch(e){error=e;}
+    try{const r=await sb.from('posts').update({outcome:oc,outcome_auto:false}).eq('id',id);error=r.error;}catch(e){error=e;}
+    // fail-safe: outcome_auto kolonu yoksa onsuz dene
+    if(error&&/outcome_auto|column/i.test(error.message||'')){
+      try{const r2=await sb.from('posts').update({outcome:oc}).eq('id',id);error=r2.error;}catch(e){error=e;}
+    }
     if(error){p.outcome=prev;alert('Sonuç kaydedilemedi: '+(error.message||error));return;}
   }else saveFeed();
   renderFeed();
@@ -3305,12 +3310,23 @@ document.addEventListener('paste',e=>{
   }
 });
 
+/* metinden hedef/stop yakala: "TP: 1.1380", "Hedef 1.1380", "SL: 1.1415", "Stop 1.1415" */
+function parseTpSlFromText(text){
+  const t=text||'';
+  const grab=re=>{const m=t.match(re);return m?m[1].replace(',','.'):'';};
+  return {
+    target:grab(/(?:tp|hedef|target)\s*[:=]?\s*([0-9]+(?:[.,][0-9]+)?)/i),
+    stop:grab(/(?:sl|stop|durdur)\s*[:=]?\s*([0-9]+(?:[.,][0-9]+)?)/i)
+  };
+}
 document.getElementById('c-post').addEventListener('click',()=>{
   if(!currentUser){showGate();return;}
   const sym=document.getElementById('c-sym').value.trim()||composeSym;
   const text=document.getElementById('c-text').value.trim();
-  const target=(document.getElementById('c-target').value||'').trim();
-  const stop=(document.getElementById('c-stop').value||'').trim();
+  let target=(document.getElementById('c-target').value||'').trim();
+  let stop=(document.getElementById('c-stop').value||'').trim();
+  // alanlar boşsa metindeki TP/SL'i otomatik çek (şablonla uyumlu) — ikisi de bulunursa kullan
+  if(!target&&!stop){const g=parseTpSlFromText(text); if(g.target&&g.stop){target=g.target;stop=g.stop;}}
   const outcome=target?'open':null;   // hedef girildiyse "devam ediyor" olarak başlar
   if(!sym&&!text&&!composeImgs.length){alert('Lütfen en az bir parite, analiz yazısı veya görsel ekle.');return;}
   const resetCompose=()=>{document.getElementById('c-sym').value='';document.getElementById('c-text').value='';document.getElementById('c-target').value='';document.getElementById('c-stop').value='';composeSym='';document.querySelectorAll('.spx').forEach(x=>x.classList.remove('sel'));clearComposeImgs();feedFilter='all';feedSym='all';document.querySelectorAll('.ff').forEach(x=>x.classList.toggle('active',x.dataset.f==='all'));};
@@ -4438,7 +4454,7 @@ async function sbLoadFeed(){
     const vb={}; (votes||[]).forEach(v=>{const o=vb[v.post_id]||(vb[v.post_id]={agree:0,disagree:0,neutral:0});if(o[v.choice]!=null)o[v.choice]++;});
     const vl={}; (votes||[]).forEach(v=>{(vl[v.post_id]||(vl[v.post_id]=[])).push({uid:v.user_id,name:pmap[v.user_id]||'Kullanıcı',choice:v.choice});});
     const cb={}; (comments||[]).forEach(c=>{(cb[c.post_id]||(cb[c.post_id]=[])).push({id:c.id,uid:c.user_id,name:c.username,text:c.text,edited:!!c.edited,ts:new Date(c.created_at).getTime()});});
-    feed=(posts||[]).map(p=>({id:p.id,uid:p.user_id,name:p.username,symbol:p.symbol,bias:p.bias,text:p.text,edited:!!p.edited,imgs:parseImgUrl(p.img_url),target:p.target||null,stop:p.stop||null,outcome:p.outcome||null,ts:new Date(p.created_at).getTime(),votes:vb[p.id]||{agree:0,disagree:0,neutral:0},voters:vl[p.id]||[],comments:cb[p.id]||[]}));
+    feed=(posts||[]).map(p=>({id:p.id,uid:p.user_id,name:p.username,symbol:p.symbol,bias:p.bias,text:p.text,edited:!!p.edited,imgs:parseImgUrl(p.img_url),target:p.target||null,stop:p.stop||null,outcome:p.outcome||null,outcomeAuto:!!p.outcome_auto,ts:new Date(p.created_at).getTime(),votes:vb[p.id]||{agree:0,disagree:0,neutral:0},voters:vl[p.id]||[],comments:cb[p.id]||[]}));
     myVotes={}; if(currentUser)(votes||[]).forEach(v=>{if(v.user_id===currentUser.id)myVotes[v.post_id]=v.choice;});
     return true;
   }catch(e){console.warn('sbLoadFeed',e);return false;}

@@ -507,3 +507,31 @@ create policy "nb_state self" on nb_state
 
 - Görseller mevcut `screenshots` bucket'ına yüklenir; tabloda yalnızca URL tutulur (tablo küçük kalır).
 - Tablo henüz yoksa veri **yine de** tarayıcıda (localStorage) çalışır; tabloyu açınca otomatik cihazlar arası senkron olur.
+
+---
+
+## 🤖 Otomatik sonuç işaretleme — `check-outcomes` (2026-07-03)
+
+Hedef/Stop girilmiş paylaşımlar artık **otomatik** "✅ tuttu / ❌ stop" işaretlenir.
+
+Kurulu bileşenler (bu adımlar UYGULANDI; yeni projeye taşınırsa tekrar gerekir):
+
+1. **Kolonlar** — migration `outcome_auto_columns_and_cron_ext`:
+```sql
+alter table posts add column if not exists outcome_auto boolean default false;
+alter table posts add column if not exists outcome_at timestamptz;
+create index if not exists posts_open_outcome_idx on posts (created_at) where outcome = 'open';
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+```
+2. **Edge Function `check-outcomes`** (kaynak: `supabase-edge-check-outcomes.ts`):
+   Yahoo Finance 5 dk mumlarıyla, post SONRASI fiyat önce TP'ye mi SL'e mi değmiş bakar.
+   - Aynı mumda ikisi de değdiyse muhafazakâr: stop sayılır.
+   - Yön/değer tutarsızsa (long'da hedef<stop) karışmaz.
+   - 30 günden eski açık paylaşımlara bakmaz. XAU için GC=F (vadeli) kullanılır.
+   - Test: `GET /functions/v1/check-outcomes?probe=EURUSD=X` → mum sayısı döner (DB'ye dokunmaz).
+3. **Zamanlama** — pg_cron işi `check-outcomes-5m` (5 dakikada bir `net.http_post` ile fonksiyonu çağırır).
+   Kontrol: `select jobname, schedule, active from cron.job;`
+   Son koşular: `select * from cron.job_run_details order by start_time desc limit 5;`
+
+Manuel işaretleme her zaman otomatiği geçersiz kılar (`outcome_auto=false` yazılır).
