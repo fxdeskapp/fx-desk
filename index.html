@@ -349,6 +349,29 @@
   .ztf-fill.neg{background:var(--red)}
   .ztf-plabel{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:5px;gap:8px}
   .ztf-empty{background:var(--panel);border:1px dashed var(--border);border-radius:var(--radius);padding:26px 18px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
+  /* ---- BEM doğrulanmış veri paneli ---- */
+  .bem-box{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px 15px;margin-top:14px}
+  .bem-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px}
+  .bem-verified{background:rgba(0,242,255,.10);border:1px solid var(--accent);color:var(--accent);font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}
+  .bem-verified.stale{background:transparent;border-color:var(--border);color:var(--muted)}
+  .bem-link{color:var(--muted);font-size:11px;text-decoration:none;margin-left:auto}
+  .bem-link:hover{color:var(--accent);text-decoration:underline}
+  .bem-acc{font-size:12px;color:var(--muted);margin-bottom:11px}
+  .bem-acc b{color:var(--text);font-weight:700}
+  .bem-bars{display:flex;flex-direction:column;gap:9px;margin-bottom:12px}
+  .bem-bar-l{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;gap:8px}
+  .bem-bar-l span:first-child{color:var(--muted);font-weight:600}
+  .bem-bar-l b{font-variant-numeric:tabular-nums}
+  .bem-track{height:7px;background:var(--bg);border:1px solid var(--border);border-radius:20px;overflow:hidden;position:relative}
+  .bem-fill{height:100%;border-radius:20px;transition:width .4s}
+  .bem-fill.good{background:var(--green)} .bem-fill.warn{background:var(--gold)} .bem-fill.bad{background:var(--red)}
+  .bem-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:9px}
+  .bem-c{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+  .bem-c-l{font-size:10px;color:var(--muted);font-weight:600;margin-bottom:2px}
+  .bem-c-v{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+  .bem-c-v.pos{color:var(--green)} .bem-c-v.neg{color:var(--red)}
+  .bem-chart{width:100%;height:150px;margin-top:12px;display:block}
+  .bem-foot{font-size:10.5px;color:var(--muted);margin-top:9px;line-height:1.5}
   .feed-symfilter{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 18px}
   .fsf-lbl{font-size:12px;color:var(--muted);font-weight:600;margin-right:2px}
   .fsf{background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.12s;display:inline-flex;align-items:center;gap:6px}
@@ -1619,6 +1642,18 @@
             <div class="ztf-sub" id="ztf-sub">50K tek aşamalı BEM hesabı — tüm işlemler burada, şeffaf şekilde.</div>
           </div>
           <button id="ztf-settings" class="ztf-cog" type="button" title="Hesap ayarları" style="display:none">⚙️</button>
+        </div>
+        <!-- BEM'den canlı çekilen doğrulanmış veri -->
+        <div id="bem-box" class="bem-box" style="display:none">
+          <div class="bem-top">
+            <span class="bem-verified" id="bem-verified">✓ BEM tarafından doğrulanmış</span>
+            <a id="bem-link" class="bem-link" href="#" target="_blank" rel="noopener">kaynağı gör ↗</a>
+          </div>
+          <div class="bem-acc" id="bem-acc"></div>
+          <div class="bem-bars" id="bem-bars"></div>
+          <div class="bem-grid" id="bem-grid"></div>
+          <canvas id="bem-chart" class="bem-chart" style="display:none"></canvas>
+          <div class="bem-foot" id="bem-foot"></div>
         </div>
         <div class="ztf-stats" id="ztf-stats"></div>
         <div class="ztf-prog" id="ztf-prog"></div>
@@ -3462,10 +3497,151 @@ function ztfR(p){
   return null;
 }
 function ztfPosts(){return feed.filter(p=>chOf(p)==='ztf').sort((a,b)=>a.ts-b.ts);}
+
+/* ===== BEM DOĞRULANMIŞ VERİ =====
+   Prop hesabının istatistikleri BEM'in herkese açık "paylaşılan hesap"
+   ucundan çekilir — elle girilmez, dolayısıyla kanıt niteliğindedir.
+   Aynı veriyi herkes kaynak linkinden doğrulayabilir. */
+const BEM_ID='6a8efb0e30e94a645d653c1e';
+const BEM_API='https://api.dashboard.bemfunding.com/v1/accounts/shared/'+BEM_ID;
+const BEM_PUB='https://dashboard.bemfunding.com/metrics/'+BEM_ID;
+const BEM_CACHE='fxdesk_bem_cache';
+let bemData=null, bemGrowth=null, bemAt=0, bemBusy=false;
+
+function bemCacheLoad(){
+  try{const s=JSON.parse(localStorage.getItem(BEM_CACHE)||'null');
+    if(s&&s.d){bemData=s.d;bemGrowth=s.g||null;bemAt=s.t||0;}}catch(e){}
+}
+function bemCacheSave(){
+  try{localStorage.setItem(BEM_CACHE,JSON.stringify({d:bemData,g:bemGrowth,t:bemAt}));}catch(e){}
+}
+async function loadBem(force){
+  if(bemBusy)return;
+  if(!force&&bemData&&Date.now()-bemAt<60000)return;   // 1 dk tazelik yeter
+  bemBusy=true;
+  try{
+    const r=await fetch(BEM_API,{cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(!j||!j.statistics)throw new Error('beklenmeyen yanıt');
+    bemData=j; bemAt=Date.now();
+    // equity eğrisi (POST + filter) — başarısız olursa panel yine çalışsın
+    try{
+      const g=await fetch(BEM_API+'/growth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filter:'daily'})});
+      if(g.ok){const gj=await g.json(); if(Array.isArray(gj))bemGrowth=gj;}
+    }catch(e){}
+    bemCacheSave();
+  }catch(e){ console.warn('BEM verisi alınamadı',e); }
+  finally{ bemBusy=false; }
+}
+const bemMoney=v=>(v<0?'-':'')+'$'+Math.abs(Math.round(v)).toLocaleString('tr-TR');
+/* İki limit + hedef için ilerleme çubukları */
+function bemBarsHTML(s){
+  const bal=s.currentEquity!=null?s.currentEquity:s.currentBalance;
+  const rows=[];
+  // Hedefe ilerleme
+  const start=s.startingBalance||0, tgt=s.equityPassLevel||0;
+  if(tgt>start){
+    const pct=Math.max(0,Math.min(100,(bal-start)/(tgt-start)*100));
+    rows.push({l:'🎯 Hedefe ilerleme',v:'%'+pct.toFixed(1)+'  ·  '+bemMoney(bal)+' / '+bemMoney(tgt),p:pct,c:'good'});
+  }
+  // Günlük kayıp limitine kalan pay
+  const dLim=s.maxDailyLossLimitEquityLevel||0;
+  if(dLim&&bal>0){
+    const room=bal-dLim, span=(s.startingBalance||bal)-dLim;
+    const used=span>0?Math.max(0,Math.min(100,(1-room/span)*100)):0;
+    rows.push({l:'🛡 Günlük kayıp limiti',v:bemMoney(room)+' pay  ·  alt sınır '+bemMoney(dLim),p:used,c:used>66?'bad':(used>33?'warn':'good')});
+  }
+  // Toplam kayıp limitine kalan pay
+  const mLim=s.maxLossLimitEquityLevel||0;
+  if(mLim&&bal>0){
+    const room=bal-mLim, span=(s.startingBalance||bal)-mLim;
+    const used=span>0?Math.max(0,Math.min(100,(1-room/span)*100)):0;
+    rows.push({l:'⛔ Toplam kayıp limiti',v:bemMoney(room)+' pay  ·  alt sınır '+bemMoney(mLim),p:used,c:used>66?'bad':(used>33?'warn':'good')});
+  }
+  return rows.map(r=>'<div><div class="bem-bar-l"><span>'+r.l+'</span><b>'+esc(r.v)+'</b></div>'+
+    '<div class="bem-track"><div class="bem-fill '+r.c+'" style="width:'+r.p.toFixed(1)+'%"></div></div></div>').join('');
+}
+/* Equity eğrisi — hedef ve limit çizgileriyle */
+function bemDrawChart(){
+  const cv=document.getElementById('bem-chart'); if(!cv)return;
+  const eq=(bemGrowth||[]).filter(x=>x.name==='EQUITY');
+  if(eq.length<2){cv.style.display='none';return;}   // tek nokta çizgi olmaz
+  cv.style.display='block';
+  // panel henüz görünür değilse clientWidth 0 olur → çizim boşa gider.
+  // Bu durumda görünür olunca yeniden çizmek üzere ertele.
+  const w=cv.clientWidth||(cv.parentElement&&cv.parentElement.clientWidth)||0;
+  if(w<10){ clearTimeout(bemDrawChart._t); bemDrawChart._t=setTimeout(bemDrawChart,250); return; }
+  const dpr=window.devicePixelRatio||1, h=150;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,h);
+  const S=bemData.statistics;
+  const vals=eq.map(x=>x.value);
+  const lo=Math.min(...vals,S.maxLossLimitEquityLevel||Infinity);
+  const hi=Math.max(...vals,S.equityPassLevel||-Infinity);
+  const pad=(hi-lo)*0.08||1, min=lo-pad, max=hi+pad;
+  const X=i=>eq.length>1?(i/(eq.length-1))*(w-8)+4:w/2;
+  const Y=v=>h-8-((v-min)/(max-min))*(h-16);
+  const line=(v,color,dash)=>{ if(v==null||!isFinite(v))return;
+    g.save();g.strokeStyle=color;g.setLineDash(dash||[]);g.lineWidth=1;
+    g.beginPath();g.moveTo(0,Y(v));g.lineTo(w,Y(v));g.stroke();g.restore(); };
+  line(S.equityPassLevel,'rgba(0,242,255,.45)',[4,4]);
+  line(S.maxLossLimitEquityLevel,'rgba(255,82,82,.45)',[4,4]);
+  line(S.startingBalance,'rgba(128,128,128,.35)',[2,3]);
+  // equity çizgisi
+  g.strokeStyle=vals[vals.length-1]>=(S.startingBalance||0)?'#00f2ff':'#ff5252';
+  g.lineWidth=2; g.beginPath();
+  eq.forEach((p,i)=>{ i?g.lineTo(X(i),Y(p.value)):g.moveTo(X(i),Y(p.value)); });
+  g.stroke();
+}
+function renderBem(){
+  const box=document.getElementById('bem-box'); if(!box)return;
+  if(!bemData||!bemData.statistics){box.style.display='none';return;}
+  box.style.display='block';
+  const S=bemData.statistics, A=bemData.account||{};
+  const link=document.getElementById('bem-link'); if(link)link.href=BEM_PUB;
+  const vb=document.getElementById('bem-verified');
+  const fresh=Date.now()-bemAt<10*60*1000;
+  if(vb){vb.classList.toggle('stale',!fresh);vb.textContent=fresh?'✓ BEM tarafından doğrulanmış':'✓ BEM verisi (önbellek)';}
+  const acc=document.getElementById('bem-acc');
+  if(acc)acc.innerHTML='<b>'+esc(A.label||'BEM hesabı')+'</b>'+(A.status?' · '+esc(A.status==='ACTIVE'?'Aktif':A.status):'');
+  const bars=document.getElementById('bem-bars'); if(bars)bars.innerHTML=bemBarsHTML(S);
+  // Firmanın hesapladığı metrikler (bizim değil)
+  const pnl=S.currentEquity-S.startingBalance;
+  const cell=(l,v,cls)=>'<div class="bem-c"><div class="bem-c-l">'+l+'</div><div class="bem-c-v'+(cls?' '+cls:'')+'">'+v+'</div></div>';
+  const grid=document.getElementById('bem-grid');
+  if(grid)grid.innerHTML=
+    cell('BAKİYE',bemMoney(S.currentBalance),'')+
+    cell('EQUITY',bemMoney(S.currentEquity),'')+
+    cell('NET K/Z',(pnl>=0?'+':'')+bemMoney(pnl),pnl>0?'pos':(pnl<0?'neg':''))+
+    cell('İŞLEM',S.trades||0,'')+
+    cell('İSABET','%'+Math.round(S.winRate||0),(S.winRate>=50?'pos':(S.trades?'neg':'')))+
+    cell('PROFIT F.',(S.profitFactor||0).toFixed(2),(S.profitFactor>=1?'pos':(S.trades?'neg':'')))+
+    cell('ORT. RR',(S.averageRRR||0).toFixed(2),'')+
+    cell('İŞLEM GÜNÜ',S.activeTradingDays||0,'');
+  bemDrawChart();
+  const foot=document.getElementById('bem-foot');
+  if(foot)foot.innerHTML='Bu veriler BEM Funding sunucusundan canlı çekilir; elle girilmez. '+
+    (bemAt?'Son güncelleme: '+new Date(bemAt).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}):'');
+}
+bemCacheLoad();
+/* ztf açıkken 2 dk'da bir tazele; sekme arka plandaysa boşuna istek atma */
+setInterval(()=>{
+  if(feedChannel!=='ztf')return;
+  const fv=document.getElementById('view-feed');
+  if(!fv||fv.style.display==='none')return;
+  if(document.visibilityState&&document.visibilityState!=='visible')return;
+  loadBem(true).then(()=>{ if(feedChannel==='ztf')renderBem(); });
+},120000);
+/* pencere yeniden boyutlanınca grafiği yeniden çiz (canvas ölçeklenmez) */
+window.addEventListener('resize',()=>{ if(feedChannel==='ztf'&&bemData)bemDrawChart(); });
 function renderZtf(){
   const cfg=ztfCfg();
   const sub=document.getElementById('ztf-sub');
   if(sub)sub.textContent=cfg.name+' — tüm işlemler burada, şeffaf şekilde.';
+  // BEM verisi: önbellekten hemen çiz, arkadan tazele
+  renderBem();
+  loadBem().then(()=>{ if(feedChannel==='ztf')renderBem(); });
   const posts=ztfPosts();
   const closed=posts.filter(p=>p.outcome==='hit'||p.outcome==='miss');
   const rs=closed.map(ztfR).filter(v=>v!=null);
@@ -3499,6 +3675,7 @@ function applyChannelUI(){
   const ztf=feedChannel==='ztf';
   document.querySelectorAll('.ch-tab').forEach(b=>b.classList.toggle('active',b.dataset.ch===feedChannel));
   const hd=document.getElementById('ztf-head'); if(hd)hd.style.display=ztf?'block':'none';
+  const bb=document.getElementById('bem-box'); if(bb&&!ztf)bb.style.display='none';
   const cog=document.getElementById('ztf-settings'); if(cog)cog.style.display=(ztf&&isZtfAuthor())?'':'none';
   // ztf kanalında yalnızca yönetici paylaşım formunu görür
   const comp=document.querySelector('#view-feed .compose');
