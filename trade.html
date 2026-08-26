@@ -312,6 +312,11 @@
   .ff{background:var(--panel-2);border:1px solid var(--border);color:var(--muted);padding:6px 13px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:.12s}
   .ff:hover{color:var(--text)}
   .ff.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  /* yönetici paylaşım bildirimi aç/kapa (feed başlığı) */
+  .ap-toggle{background:var(--panel-2);border:1px solid var(--border);color:var(--muted);padding:6px 13px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:.12s;white-space:nowrap}
+  .ap-toggle:hover{color:var(--text)}
+  .ap-toggle.on{background:var(--green);border-color:var(--green);color:#fff}
+  .ap-toggle.blocked{background:var(--panel-2);border-color:var(--red);color:var(--red)}
   .feed-symfilter{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 18px}
   .fsf-lbl{font-size:12px;color:var(--muted);font-weight:600;margin-right:2px}
   .fsf{background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.12s;display:inline-flex;align-items:center;gap:6px}
@@ -1541,6 +1546,7 @@
           <button class="ff" data-f="short">Short</button>
           <button class="ff" data-f="neutral">Nötr</button>
         </div>
+        <button id="ap-toggle" class="ap-toggle" type="button" title="Yönetici paylaşım bildirimi">🔔 Bildirim</button>
       </div>
       <div class="week-top" id="week-top" style="display:none"></div>
       <div class="senti" id="senti" style="display:none"></div>
@@ -2579,7 +2585,7 @@ bindAlarmUI();
    Yöntem: 45 sn'de bir yalnızca EN YENİ gönderiyi çeker (hafif sorgu); yazarı
    yönetici/mod ise ve daha önce duyurulmadıysa uyarır. Kendi gönderin uyarmaz. */
 const AP_DEF={on:true,sound:'chime',vol:70};
-let apCfg=loadApCfg(), _apSeen=null, _apStaffIds=null, _apStaffAt=0, _apBusy=false;
+let apCfg=loadApCfg(), _apSeen='', _apSeenKey=null, _apStaffIds=null, _apStaffAt=0, _apBusy=false;
 function loadApCfg(){
   try{const s=JSON.parse(localStorage.getItem('fxdesk_adminpost')||'null');if(s)return Object.assign({},AP_DEF,s);}catch(e){}
   return Object.assign({},AP_DEF);
@@ -2623,10 +2629,15 @@ async function checkAdminPosts(){
       .order('created_at',{ascending:false}).limit(1);
     if(error||!data||!data.length)return;
     const p=data[0];
+    // Baseline kullanıcıya özel anahtarda tutulur. currentUser giriş sonrası
+    // geldiği için anahtar değişebilir → her turda localStorage'dan oku
+    // (yalnızca bellekteki _apSeen'e güvenirsek yanlış anahtara yazılabilir).
+    const key=apSeenKey();
+    if(_apSeenKey!==key){ _apSeenKey=key; _apSeen=localStorage.getItem(key)||''; }
     // ilk açılış: mevcut son gönderiyi "görüldü" say, geçmişi çalma
-    if(_apSeen==null){ _apSeen=localStorage.getItem(apSeenKey())||''; if(!_apSeen){ _apSeen=p.id; try{localStorage.setItem(apSeenKey(),p.id);}catch(e){} return; } }
+    if(!_apSeen){ _apSeen=p.id; try{localStorage.setItem(key,p.id);}catch(e){} return; }
     if(p.id===_apSeen)return;
-    _apSeen=p.id; try{localStorage.setItem(apSeenKey(),p.id);}catch(e){}
+    _apSeen=p.id; try{localStorage.setItem(key,p.id);}catch(e){}
     if(p.user_id===currentUser.id)return;                       // kendi gönderin çalmasın
     if(Date.now()-new Date(p.created_at).getTime()>30*60*1000)return; // 30 dk'dan eskiyse çalma
     const staff=await apStaffIds();
@@ -2636,10 +2647,50 @@ async function checkAdminPosts(){
     if(fv&&fv.style.display!=='none'&&typeof refreshFeed==='function')refreshFeed();
   }catch(e){}finally{_apBusy=false;}
 }
-setInterval(checkAdminPosts,45000);
+setInterval(checkAdminPosts,20000);
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible')checkAdminPosts(); });
 
+/* Paylaşımlar başlığındaki hızlı aç/kapa düğmesi.
+   Ayrıca ÖNEMLİ: tarayıcılar kullanıcı etkileşimi olmadan ses çalmayı ve
+   bildirim izni istemeyi engeller. Bu düğmeye basmak ikisini de çözer. */
+function apNotifPerm(){ try{ return ('Notification'in window)?Notification.permission:'unsupported'; }catch(e){ return 'unsupported'; } }
+function syncApBtn(){
+  const b=document.getElementById('ap-toggle'); if(!b)return;
+  const perm=apNotifPerm();
+  const blocked=apCfg.on && perm==='denied';
+  b.classList.toggle('on',!!apCfg.on && !blocked);
+  b.classList.toggle('blocked',blocked);
+  b.textContent=apCfg.on?(blocked?'🔕 İzin engelli':'🔔 Bildirim açık'):'🔕 Bildirim kapalı';
+  b.title=blocked
+    ? 'Tarayıcı bildirim iznini engellemiş. Adres çubuğundaki kilit simgesinden izin ver (ses yine de çalar).'
+    : (apCfg.on?'Yönetici paylaşınca ses + bildirim gelir — kapatmak için tıkla'
+               :'Yönetici paylaşınca uyarılmak için tıkla');
+}
+function apToggleClick(){
+  apCfg.on=!apCfg.on; saveApCfg();
+  syncApBtn(); syncApUI();                    // arayüzü HEMEN güncelle (izin diyaloğunu bekleme)
+  if(apCfg.on){
+    alCtx();                                  // ses motorunu kullanıcı hareketiyle aç (autoplay kilidi)
+    apPlay();                                 // açıldığını duyur (sesin çalıştığını da kanıtlar)
+    // izin iste; sonucu ne olursa olsun ses+toast çalışmaya devam eder
+    try{
+      if('Notification'in window && Notification.permission==='default'){
+        const r=Notification.requestPermission();
+        if(r&&typeof r.then==='function')r.then(()=>syncApBtn()).catch(()=>{});
+      }
+    }catch(e){}
+    checkAdminPosts();                        // baz noktasını hemen kur
+  }
+}
+function bindApBtn(){
+  const b=document.getElementById('ap-toggle'); if(!b||b._bound)return; b._bound=true;
+  b.addEventListener('click',apToggleClick);
+  syncApBtn();
+}
+bindApBtn();
+
 function syncApUI(){
+  syncApBtn();
   const on=document.getElementById('ap-on'); if(!on)return;
   on.checked=apCfg.on;
   document.getElementById('ap-sound').value=apCfg.sound;
