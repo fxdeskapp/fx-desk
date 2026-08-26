@@ -520,6 +520,8 @@
   .lightbox.open{display:flex}
   .lightbox img{border-radius:8px;transform-origin:0 0;will-change:transform;cursor:zoom-in;user-select:none;-webkit-user-drag:none;max-width:none;max-height:none}
   .lightbox img.zoomed{cursor:grab}
+  /* çok yakınlaşınca bulanık büyütme yerine net pikseller (grafik/yazı okunur kalsın) */
+  .lightbox img.sharp{image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges}
   .lightbox img.dragging{cursor:grabbing}
   /* zoom kontrolleri */
   .lb-bar{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:4px;background:var(--panel);border:1px solid var(--border);border-radius:24px;padding:6px 8px;box-shadow:var(--shadow-lg);z-index:201}
@@ -3273,14 +3275,28 @@ function renderMyActivity(){
 }
 
 /* görsel küçültme (localStorage'ı şişirmemek için) */
+/* Görsel kaydetme: grafik ekran görüntülerinde fiyatlar/mumlar zoom yapınca
+   okunabilsin diye yüksek çözünürlük korunur. WebP desteklenirse kullanılır —
+   aynı dosya boyutunda JPEG'e göre çok daha fazla detay taşır
+   (ölçüm: 2560px WebP ≈ 52 KB, 1100px JPEG ≈ 33 KB). */
+let _webpOK=null;
+function webpSupported(){
+  if(_webpOK==null){
+    try{const c=document.createElement('canvas');c.width=c.height=1;
+      _webpOK=c.toDataURL('image/webp').indexOf('data:image/webp')===0;}catch(e){_webpOK=false;}
+  }
+  return _webpOK;
+}
 function readAndResize(file,cb){
   const r=new FileReader();
   r.onload=e=>{const img=new Image();
-    img.onload=()=>{const max=1100;let w=img.width,h=img.height;
+    img.onload=()=>{const max=2560;let w=img.width,h=img.height;
       if(w>max){h=Math.round(h*max/w);w=max;}
       const c=document.createElement('canvas');c.width=w;c.height=h;
-      c.getContext('2d').drawImage(img,0,0,w,h);
-      cb(c.toDataURL('image/jpeg',0.82));};
+      const g=c.getContext('2d');
+      g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high';
+      g.drawImage(img,0,0,w,h);
+      cb(webpSupported()?c.toDataURL('image/webp',0.88):c.toDataURL('image/jpeg',0.88));};
     img.src=e.target.result;};
   r.readAsDataURL(file);
 }
@@ -3826,6 +3842,8 @@ function lbApply(){
   const {img}=lbEls(); if(!img)return;
   img.style.transform='translate('+LB.x+'px,'+LB.y+'px) scale('+LB.sc+')';
   img.classList.toggle('zoomed',LB.sc>LB.fit*1.02);
+  // 1:1'in ötesine geçince yumuşatma yerine net piksel göster
+  img.classList.toggle('sharp',LB.sc>1.05);
   const pct=document.getElementById('lb-pct');
   if(pct)pct.textContent='%'+Math.round(LB.sc/LB.fit*100);
 }
@@ -4992,8 +5010,11 @@ async function ensureProfileRow(){
 async function uploadShot(dataUrl){
   try{
     const blob=await (await fetch(dataUrl)).blob();
-    const path=(currentUser?currentUser.id:'anon')+'/'+Date.now()+'.jpg';
-    const {error}=await sb.storage.from('screenshots').upload(path,blob,{contentType:'image/jpeg',upsert:true});
+    // tür data URL'den okunur (webp/jpeg) — uzantı ve contentType eşleşsin
+    const mime=(String(dataUrl).match(/^data:(image\/[a-z]+)/)||[])[1]||blob.type||'image/jpeg';
+    const ext=mime==='image/webp'?'webp':(mime==='image/png'?'png':'jpg');
+    const path=(currentUser?currentUser.id:'anon')+'/'+Date.now()+'.'+ext;
+    const {error}=await sb.storage.from('screenshots').upload(path,blob,{contentType:mime,upsert:true});
     if(error){console.warn('upload',error);return null;}
     return sb.storage.from('screenshots').getPublicUrl(path).data.publicUrl;
   }catch(e){console.warn(e);return null;}
