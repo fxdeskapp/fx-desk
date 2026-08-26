@@ -3508,7 +3508,7 @@ function renderFeed(){
   list.innerHTML='';
   if(!items.length){
     list.innerHTML=ztf
-      ? '<div class="ztf-empty">Bu hesapta henüz işlem paylaşılmadı.<br>'+(isZtfAuthor()?'Yukarıdaki formdan ilk işlemini ekleyebilirsin. ☝️':'Yönetici işlem ekledikçe burada görünecek.')+'</div>'
+      ? '<div class="ztf-empty">Bu hesapta henüz işlem paylaşılmadı.<br>'+(isZtfAuthor()?'Yukarıdaki formdan ilk işlemini ekleyebilirsin. ☝️':'Yeni işlem eklendikçe burada görünecek — her işleme yorum yazabilirsin. 💬')+'</div>'
       : '<div class="feed-empty">Bu filtrede paylaşım yok. İlk paylaşımı sen yap! ☝️</div>';
     return;
   }
@@ -3553,9 +3553,9 @@ function renderFeed(){
         <button class="oc-btn oc-miss${p.outcome==='miss'?' on':''}" data-oc="miss">❌ Tutmadı</button>
         <button class="oc-btn oc-open${p.outcome==='open'||!p.outcome?' on':''}" data-oc="open">⏳ Devam</button>
       </div>`:''}
-      <div class="comments ${openComments.has(p.id)?'open':''}">
+      <div class="comments ${(openComments.has(p.id)||feedChannel==='ztf')?'open':''}">
         ${p.comments.map((c,ci)=>{const ownC=currentUser&&c.uid&&c.uid===currentUser.id;const canDelC=currentUser&&(ownC||currentUser.isAdmin);return `<div class="comment" data-ci="${ci}">${avatarBox(c.uid,c.name,'avatar')}<div class="cm-body"><div class="cmname">${esc(c.name)} <span style="color:var(--muted);font-weight:400;font-size:11px">· ${timeAgo(c.ts)}${c.edited?' · <span class="edited-tag">düzenlendi</span>':''}</span>${(ownC||canDelC)?`<span class="cm-acts">${ownC?'<b class="cm-edit" title="Düzenle">✏️</b>':''}${canDelC?'<b class="cm-del" title="Sil">🗑</b>':''}</span>`:''}</div><div class="cmtext">${esc(c.text)}</div>${cmImgsHTML(c)}</div></div>`;}).join('')}
-        <div class="cm-add"><input placeholder="Yorum yaz..." /><button class="cm-pic" type="button" title="Görsel ekle (veya Ctrl+V ile yapıştır)">📎</button><button>Gönder</button></div>
+        <div class="cm-add"><input placeholder="${feedChannel==='ztf'?'Bu işlem hakkında yorum yaz...':'Yorum yaz...'}" /><button class="cm-pic" type="button" title="Görsel ekle (veya Ctrl+V ile yapıştır)">📎</button><button>Gönder</button></div>
         <div class="cm-prev"></div>
       </div>`;
     card.querySelectorAll('.vote').forEach(btn=>btn.addEventListener('click',()=>vote(p.id,btn.dataset.v)));
