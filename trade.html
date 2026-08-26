@@ -516,9 +516,20 @@
   .pv-count{color:var(--muted);font-size:12px;display:inline-flex;align-items:center;gap:3px}
   .feed-empty{text-align:center;color:var(--muted);padding:46px 20px;font-size:13px}
 
-  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:200;cursor:zoom-out;padding:30px}
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:200;overflow:hidden;touch-action:none}
   .lightbox.open{display:flex}
-  .lightbox img{max-width:100%;max-height:100%;border-radius:8px}
+  .lightbox img{border-radius:8px;transform-origin:0 0;will-change:transform;cursor:zoom-in;user-select:none;-webkit-user-drag:none;max-width:none;max-height:none}
+  .lightbox img.zoomed{cursor:grab}
+  .lightbox img.dragging{cursor:grabbing}
+  /* zoom kontrolleri */
+  .lb-bar{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:4px;background:var(--panel);border:1px solid var(--border);border-radius:24px;padding:6px 8px;box-shadow:var(--shadow-lg);z-index:201}
+  .lb-bar button{background:var(--panel-2);border:1px solid var(--border);color:var(--text);width:34px;height:34px;border-radius:50%;cursor:pointer;font-family:inherit;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0;transition:.12s}
+  .lb-bar button:hover{border-color:var(--accent);color:var(--accent)}
+  .lb-zoom{color:var(--muted);font-size:12px;font-weight:600;min-width:52px;text-align:center;font-variant-numeric:tabular-nums}
+  .lb-close{position:fixed;top:18px;right:20px;background:var(--panel);border:1px solid var(--border);color:var(--text);width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:17px;z-index:201;display:flex;align-items:center;justify-content:center;padding:0}
+  .lb-close:hover{border-color:var(--red);color:var(--red)}
+  .lb-hint{position:fixed;top:20px;left:50%;transform:translateX(-50%);color:var(--muted);font-size:12px;background:var(--panel);border:1px solid var(--border);padding:6px 13px;border-radius:20px;z-index:201;pointer-events:none;transition:opacity .4s}
+  @media(max-width:640px){.lb-hint{display:none}}
 
   /* kullanıcı çipi */
   .user-chip{display:flex;align-items:center;gap:8px;margin-left:14px;background:var(--panel-2);border:1px solid var(--border);padding:4px 6px 4px 5px;border-radius:20px}
@@ -2037,7 +2048,17 @@
 
 
 <!-- görsel büyütme -->
-<div class="lightbox" id="lightbox"><img id="lb-img" src="" alt="" /></div>
+<div class="lightbox" id="lightbox">
+  <img id="lb-img" src="" alt="" />
+  <button class="lb-close" id="lb-close" type="button" title="Kapat (Esc)">✕</button>
+  <div class="lb-hint" id="lb-hint">Tekerlek ile yakınlaştır · sürükleyerek gez · çift tıkla</div>
+  <div class="lb-bar" id="lb-bar">
+    <button id="lb-out" type="button" title="Uzaklaştır (−)">−</button>
+    <span class="lb-zoom" id="lb-pct">%100</span>
+    <button id="lb-in" type="button" title="Yakınlaştır (+)">+</button>
+    <button id="lb-fit" type="button" title="Ekrana sığdır (0)">⛶</button>
+  </div>
+</div>
 
 <!-- Risk / Lot hesaplayıcı modalı -->
 <div class="modal-bg" id="risk-modal">
@@ -3796,9 +3817,111 @@ document.querySelectorAll('.ff').forEach(b=>b.addEventListener('click',()=>{
   b.classList.add('active');feedFilter=b.dataset.f;renderFeed();
 }));
 
-/* lightbox */
-function openLightbox(src){document.getElementById('lb-img').src=src;document.getElementById('lightbox').classList.add('open');}
-document.getElementById('lightbox').addEventListener('click',()=>document.getElementById('lightbox').classList.remove('open'));
+/* ===== Lightbox: yakınlaştırma + kaydırma =====
+   Grafik ekran görüntülerinde fiyatlar okunabilsin diye tekerlek/çift tık ile
+   zoom, sürükleyerek gezinme. Mobilde iki parmak (pinch) desteklenir. */
+const LB={sc:1,fit:1,x:0,y:0,drag:false,px:0,py:0,ox:0,oy:0,pinch:0};
+function lbEls(){return {box:document.getElementById('lightbox'),img:document.getElementById('lb-img')};}
+function lbApply(){
+  const {img}=lbEls(); if(!img)return;
+  img.style.transform='translate('+LB.x+'px,'+LB.y+'px) scale('+LB.sc+')';
+  img.classList.toggle('zoomed',LB.sc>LB.fit*1.02);
+  const pct=document.getElementById('lb-pct');
+  if(pct)pct.textContent='%'+Math.round(LB.sc/LB.fit*100);
+}
+/* görseli ekrana sığdır ve ortala */
+function lbFit(){
+  const {box,img}=lbEls(); if(!img||!img.naturalWidth)return;
+  const pad=40;
+  const bw=box.clientWidth-pad*2, bh=box.clientHeight-pad*2;
+  LB.fit=Math.min(bw/img.naturalWidth, bh/img.naturalHeight, 1);
+  LB.sc=LB.fit;
+  LB.x=(box.clientWidth-img.naturalWidth*LB.sc)/2;
+  LB.y=(box.clientHeight-img.naturalHeight*LB.sc)/2;
+  lbApply();
+}
+/* bir noktayı sabit tutarak ölçekle (imlecin altındaki yer kaymasın) */
+function lbZoomAt(cx,cy,factor){
+  const ns=Math.max(LB.fit*0.5,Math.min(LB.fit*12,LB.sc*factor));
+  if(ns===LB.sc)return;
+  LB.x=cx-(cx-LB.x)*(ns/LB.sc);
+  LB.y=cy-(cy-LB.y)*(ns/LB.sc);
+  LB.sc=ns; lbApply();
+}
+function lbZoomCenter(factor){
+  const {box}=lbEls(); if(!box)return;
+  lbZoomAt(box.clientWidth/2,box.clientHeight/2,factor);
+}
+function openLightbox(src){
+  const {box,img}=lbEls(); if(!img)return;
+  box.classList.add('open');
+  const hint=document.getElementById('lb-hint');
+  if(hint){hint.style.opacity='1';clearTimeout(hint._h);hint._h=setTimeout(()=>{hint.style.opacity='0';},3000);}
+  img.style.transform='';                       // eski konumu temizle
+  if(img.getAttribute('src')===src && img.complete && img.naturalWidth){ lbFit(); return; }
+  img.onload=()=>lbFit();
+  img.src=src;
+}
+function closeLightbox(){const {box}=lbEls(); if(box)box.classList.remove('open');}
+(function bindLightbox(){
+  const box=document.getElementById('lightbox'); if(!box)return;
+  const img=document.getElementById('lb-img');
+  // arka plana tıklayınca kapat (görselin kendisine tıklayınca kapanmasın)
+  box.addEventListener('click',e=>{ if(e.target===box)closeLightbox(); });
+  const cb=document.getElementById('lb-close'); if(cb)cb.addEventListener('click',closeLightbox);
+  const zi=document.getElementById('lb-in');   if(zi)zi.addEventListener('click',e=>{e.stopPropagation();lbZoomCenter(1.3);});
+  const zo=document.getElementById('lb-out');  if(zo)zo.addEventListener('click',e=>{e.stopPropagation();lbZoomCenter(1/1.3);});
+  const zf=document.getElementById('lb-fit');  if(zf)zf.addEventListener('click',e=>{e.stopPropagation();lbFit();});
+  // tekerlek ile imlecin olduğu noktadan zoom
+  box.addEventListener('wheel',e=>{
+    if(!box.classList.contains('open'))return;
+    e.preventDefault();
+    lbZoomAt(e.clientX,e.clientY,e.deltaY<0?1.14:1/1.14);
+  },{passive:false});
+  // çift tık: yakınlaş / sığdır
+  img.addEventListener('dblclick',e=>{
+    e.preventDefault();e.stopPropagation();
+    if(LB.sc>LB.fit*1.02)lbFit(); else lbZoomAt(e.clientX,e.clientY,2.5);
+  });
+  // sürükleyerek gezinme
+  img.addEventListener('pointerdown',e=>{
+    if(e.button!==0)return;
+    e.preventDefault();
+    LB.drag=true;LB.px=e.clientX;LB.py=e.clientY;LB.ox=LB.x;LB.oy=LB.y;
+    img.classList.add('dragging');
+    try{img.setPointerCapture(e.pointerId);}catch(err){}
+  });
+  img.addEventListener('pointermove',e=>{
+    if(!LB.drag)return;
+    LB.x=LB.ox+(e.clientX-LB.px); LB.y=LB.oy+(e.clientY-LB.py); lbApply();
+  });
+  const endDrag=e=>{ LB.drag=false; img.classList.remove('dragging'); try{img.releasePointerCapture(e.pointerId);}catch(err){} };
+  img.addEventListener('pointerup',endDrag);
+  img.addEventListener('pointercancel',endDrag);
+  // mobil: iki parmakla yakınlaştırma
+  box.addEventListener('touchmove',e=>{
+    if(e.touches.length!==2)return;
+    e.preventDefault();
+    const [a,b]=e.touches;
+    const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+    if(LB.pinch){
+      const mx=(a.clientX+b.clientX)/2, my=(a.clientY+b.clientY)/2;
+      lbZoomAt(mx,my,d/LB.pinch);
+    }
+    LB.pinch=d;
+  },{passive:false});
+  box.addEventListener('touchend',()=>{LB.pinch=0;});
+  // pencere boyutu değişince yeniden sığdır
+  window.addEventListener('resize',()=>{ if(box.classList.contains('open'))lbFit(); });
+  // klavye: Esc kapat, +/− zoom, 0 sığdır
+  document.addEventListener('keydown',e=>{
+    if(!box.classList.contains('open'))return;
+    if(e.key==='Escape'){closeLightbox();}
+    else if(e.key==='+'||e.key==='='){e.preventDefault();lbZoomCenter(1.3);}
+    else if(e.key==='-'||e.key==='_'){e.preventDefault();lbZoomCenter(1/1.3);}
+    else if(e.key==='0'){e.preventDefault();lbFit();}
+  });
+})();
 
 /* ================= JOURNAL (İşlem Günlüğü) ================= */
 let jrTrades=[];
