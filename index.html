@@ -1641,7 +1641,10 @@
             <h3>🎯 Zero to Funded</h3>
             <div class="ztf-sub" id="ztf-sub">50K tek aşamalı BEM hesabı — tüm işlemler burada, şeffaf şekilde.</div>
           </div>
-          <button id="ztf-settings" class="ztf-cog" type="button" title="Hesap ayarları" style="display:none">⚙️</button>
+          <div style="display:flex;gap:7px;align-items:center;flex-shrink:0">
+            <a id="ztf-karne" class="ztf-cog" href="karne.html" target="_blank" rel="noopener" title="Herkese açık karne sayfası — paylaşılabilir link" style="text-decoration:none">🔗 Karne</a>
+            <button id="ztf-settings" class="ztf-cog" type="button" title="Hesap ayarları" style="display:none">⚙️</button>
+          </div>
         </div>
         <!-- BEM'den canlı çekilen doğrulanmış veri -->
         <div id="bem-box" class="bem-box" style="display:none">
@@ -3613,7 +3616,7 @@ function renderBem(){
   if(grid)grid.innerHTML=
     cell('BAKİYE',bemMoney(S.currentBalance),'')+
     cell('EQUITY',bemMoney(S.currentEquity),'')+
-    cell('NET K/Z',(pnl>=0?'+':'')+bemMoney(pnl),pnl>0?'pos':(pnl<0?'neg':''))+
+    cell('NET K/Z',(pnl>0?'+':'')+bemMoney(pnl),pnl>0?'pos':(pnl<0?'neg':''))+
     cell('İŞLEM',S.trades||0,'')+
     cell('İSABET','%'+Math.round(S.winRate||0),(S.winRate>=50?'pos':(S.trades?'neg':'')))+
     cell('PROFIT F.',(S.profitFactor||0).toFixed(2),(S.profitFactor>=1?'pos':(S.trades?'neg':'')))+

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zero to Funded — Kodak Trade Community</title>
+<meta name="description" content="50K BEM One prop hesabının canlı performans karnesi. Veriler doğrudan BEM Funding'den çekilir, elle girilmez.">
+<link rel="icon" href="icon-192.png">
+<!-- Sosyal medya önizlemesi (X, WhatsApp, Discord) -->
+<meta property="og:title" content="Zero to Funded — canlı prop hesabı karnesi">
+<meta property="og:description" content="50K BEM One hesabı. Tüm veriler BEM Funding'den canlı çekilir — elle girilmez, herkes doğrulayabilir.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="icon-512.png">
+<meta name="twitter:card" content="summary">
+<style>
+  :root{
+    --bg:#020202; --panel:#0a0a0a; --panel-2:#121212; --border:#262626;
+    --text:#f2f2f2; --muted:#808080; --green:#00f2ff; --red:#ff5252;
+    --accent:#00f2ff; --gold:#A78BFA;
+    --radius:14px; --radius-sm:9px;
+    --shadow-lg:0 12px 40px rgba(0,0,0,.45);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:var(--bg); color:var(--text); min-height:100vh;
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.5;
+    padding:22px 16px 40px;
+  }
+  .wrap{max-width:760px;margin:0 auto}
+
+  /* başlık */
+  header{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .logo{width:38px;height:38px;border-radius:9px;flex-shrink:0}
+  .brand{font-size:13px;color:var(--muted);font-weight:600}
+  h1{font-size:23px;font-weight:800;letter-spacing:-.4px;margin:10px 0 5px}
+  .lede{color:var(--muted);font-size:13.5px;max-width:56ch}
+
+  /* doğrulama şeridi */
+  .verify{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:16px 0 20px;
+    background:rgba(0,242,255,.06);border:1px solid var(--accent);border-radius:var(--radius-sm);padding:10px 13px}
+  .verify-b{font-size:11.5px;font-weight:700;color:var(--accent);white-space:nowrap}
+  .verify-t{font-size:11.5px;color:var(--muted);line-height:1.5}
+  .verify a{color:var(--accent);text-decoration:none}
+  .verify a:hover{text-decoration:underline}
+
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:17px 18px;margin-bottom:14px}
+  .card h2{font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.03em;margin-bottom:13px}
+  .acc{font-size:13px;margin-bottom:2px}
+  .acc b{font-weight:700}
+  .acc-s{font-size:11.5px;color:var(--muted)}
+
+  /* ilerleme çubukları */
+  .bars{display:flex;flex-direction:column;gap:12px}
+  .bar-l{display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-bottom:4px;flex-wrap:wrap}
+  .bar-l span{color:var(--muted);font-weight:600}
+  .bar-l b{font-variant-numeric:tabular-nums;font-weight:700}
+  .track{height:8px;background:var(--bg);border:1px solid var(--border);border-radius:20px;overflow:hidden}
+  .fill{height:100%;border-radius:20px;transition:width .5s ease}
+  .fill.good{background:var(--green)} .fill.warn{background:var(--gold)} .fill.bad{background:var(--red)}
+
+  /* metrik ızgarası */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:10px}
+  .c{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 12px}
+  .c-l{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.03em;margin-bottom:4px}
+  .c-v{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+  .c-v.pos{color:var(--green)} .c-v.neg{color:var(--red)}
+
+  canvas{width:100%;height:180px;display:block}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:10.5px;color:var(--muted);margin-top:9px}
+  .legend i{display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:4px}
+
+  .state{text-align:center;color:var(--muted);font-size:13px;padding:34px 16px}
+  .state b{color:var(--text);display:block;margin-bottom:5px;font-size:14px}
+  .retry{margin-top:12px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);
+    padding:8px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600}
+  .retry:hover{border-color:var(--accent);color:var(--accent)}
+
+  footer{color:var(--muted);font-size:11px;line-height:1.7;margin-top:22px;text-align:center}
+  footer a{color:var(--muted)}
+  footer a:hover{color:var(--accent)}
+  .disc{margin-top:9px;font-size:10.5px;opacity:.75;max-width:52ch;margin-left:auto;margin-right:auto}
+
+  @media(max-width:520px){
+    h1{font-size:20px}
+    .grid{grid-template-columns:repeat(2,1fr)}
+    .c-v{font-size:16px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="kodak-logo.svg" alt="" class="logo">
+    <div>
+      <div class="brand">KODAK TRADE COMMUNITY</div>
+    </div>
+  </header>
+
+  <h1>🎯 Zero to Funded</h1>
+  <p class="lede">Bir prop hesabının sıfırdan fonlanmaya giden yolu — canlı, filtresiz ve doğrulanabilir şekilde.</p>
+
+  <div class="verify">
+    <span class="verify-b">✓ DOĞRULANMIŞ VERİ</span>
+    <span class="verify-t">
+      Bu sayfadaki rakamların hiçbiri elle girilmez; doğrudan
+      <a href="https://dashboard.bemfunding.com/metrics/6a8efb0e30e94a645d653c1e" target="_blank" rel="noopener">BEM&nbsp;Funding&nbsp;↗</a>
+      sunucusundan çekilir. Aynı veriyi sen de o bağlantıdan görebilirsin.
+    </span>
+  </div>
+
+  <div id="app">
+    <div class="state" id="loading"><b>Veriler yükleniyor…</b>BEM Funding'e bağlanılıyor</div>
+  </div>
+
+  <footer>
+    <div><a href="./index.html">← Kodak Trade Community</a></div>
+    <div class="disc">
+      Yatırım tavsiyesi değildir. Geçmiş performans gelecekteki sonuçların garantisi değildir.
+      Prop hesapları simüle edilmiş ortamlardır.
+    </div>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var ID='6a8efb0e30e94a645d653c1e';
+  var API='https://api.dashboard.bemfunding.com/v1/accounts/shared/'+ID;
+  var app=document.getElementById('app');
+  var data=null, growth=null;
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function money(v){
+    if(v==null||!isFinite(v))return '—';
+    return (v<0?'-':'')+'$'+Math.abs(Math.round(v)).toLocaleString('tr-TR');
+  }
+
+  function bar(label,value,pct,cls){
+    pct=Math.max(0,Math.min(100,pct||0));
+    return '<div><div class="bar-l"><span>'+label+'</span><b>'+esc(value)+'</b></div>'+
+      '<div class="track"><div class="fill '+cls+'" style="width:'+pct.toFixed(1)+'%"></div></div></div>';
+  }
+  function cell(l,v,cls){
+    return '<div class="c"><div class="c-l">'+l+'</div><div class="c-v'+(cls?' '+cls:'')+'">'+esc(v)+'</div></div>';
+  }
+
+  function render(){
+    if(!data||!data.statistics){fail('Veri okunamadı');return;}
+    var S=data.statistics, A=data.account||{};
+    var eq=(S.currentEquity!=null?S.currentEquity:S.currentBalance);
+    var start=S.startingBalance||0;
+    var pnl=eq-start;
+    var h='';
+
+    /* hesap + limitler */
+    h+='<div class="card">';
+    h+='<div class="acc"><b>'+esc(A.label||'Prop hesabı')+'</b></div>';
+    h+='<div class="acc-s">'+(A.status==='ACTIVE'?'Aktif':esc(A.status||''))+
+       (A.platform?' · '+esc(A.platform):'')+'</div>';
+    h+='<div class="bars" style="margin-top:15px">';
+
+    var tgt=S.equityPassLevel||0;
+    if(tgt>start){
+      var p=(eq-start)/(tgt-start)*100;
+      h+=bar('🎯 Hedefe ilerleme', money(eq)+' / '+money(tgt), p, 'good');
+    }
+    var dl=S.maxDailyLossLimitEquityLevel||0;
+    if(dl&&eq){
+      var dRoom=eq-dl, dSpan=start-dl;
+      var dUsed=dSpan>0?(1-dRoom/dSpan)*100:0;
+      h+=bar('🛡 Günlük kayıp limiti', money(dRoom)+' pay kaldı', dUsed,
+        dUsed>66?'bad':(dUsed>33?'warn':'good'));
+    }
+    var ml=S.maxLossLimitEquityLevel||0;
+    if(ml&&eq){
+      var mRoom=eq-ml, mSpan=start-ml;
+      var mUsed=mSpan>0?(1-mRoom/mSpan)*100:0;
+      h+=bar('⛔ Toplam kayıp limiti', money(mRoom)+' pay kaldı', mUsed,
+        mUsed>66?'bad':(mUsed>33?'warn':'good'));
+    }
+    h+='</div></div>';
+
+    /* metrikler */
+    var wr=S.winRate||0, pf=S.profitFactor||0, tr=S.trades||0;
+    h+='<div class="card"><h2>PERFORMANS</h2><div class="grid">';
+    h+=cell('BAKİYE',money(S.currentBalance));
+    h+=cell('EQUITY',money(eq));
+    h+=cell('NET K/Z',(pnl>0?'+':'')+money(pnl),pnl>0?'pos':(pnl<0?'neg':''));
+    h+=cell('İŞLEM',tr);
+    h+=cell('İSABET','%'+Math.round(wr),tr?(wr>=50?'pos':'neg'):'');
+    h+=cell('PROFIT F.',pf?pf.toFixed(2):'—',tr?(pf>=1?'pos':'neg'):'');
+    h+=cell('ORT. RR',(S.averageRRR||0)?S.averageRRR.toFixed(2):'—');
+    h+=cell('İŞLEM GÜNÜ',S.activeTradingDays||0);
+    h+='</div></div>';
+
+    /* equity eğrisi — yeterli nokta varsa */
+    var pts=(growth||[]).filter(function(x){return x.name==='EQUITY';});
+    if(pts.length>1){
+      h+='<div class="card"><h2>EQUITY EĞRİSİ</h2><canvas id="ch"></canvas>'+
+         '<div class="legend">'+
+         '<span><i style="background:#00f2ff"></i>Equity</span>'+
+         '<span><i style="background:rgba(0,242,255,.5)"></i>Hedef</span>'+
+         '<span><i style="background:rgba(255,82,82,.5)"></i>Max kayıp</span>'+
+         '<span><i style="background:rgba(128,128,128,.5)"></i>Başlangıç</span>'+
+         '</div></div>';
+    }
+
+    var upd=new Date().toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    h+='<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:4px">'+
+       'Son güncelleme: '+upd+' · sayfa 60 sn\'de bir tazelenir</div>';
+
+    app.innerHTML=h;
+    if(pts.length>1)draw(pts,S);
+  }
+
+  function draw(pts,S){
+    var cv=document.getElementById('ch'); if(!cv)return;
+    var w=cv.clientWidth;
+    if(w<10){setTimeout(function(){draw(pts,S);},200);return;}   // görünür değilse ertele
+    var hh=180, dpr=window.devicePixelRatio||1;
+    cv.width=w*dpr; cv.height=hh*dpr;
+    var g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,hh);
+
+    var vals=pts.map(function(p){return p.value;});
+    var cand=vals.concat([S.equityPassLevel,S.maxLossLimitEquityLevel,S.startingBalance]
+      .filter(function(v){return v!=null&&isFinite(v)&&v>0;}));
+    var lo=Math.min.apply(null,cand), hi=Math.max.apply(null,cand);
+    var pad=(hi-lo)*0.1||1, min=lo-pad, max=hi+pad;
+    var X=function(i){return pts.length>1?(i/(pts.length-1))*(w-10)+5:w/2;};
+    var Y=function(v){return hh-10-((v-min)/(max-min))*(hh-20);};
+
+    function line(v,color,dash){
+      if(v==null||!isFinite(v)||v<=0)return;
+      g.save();g.strokeStyle=color;g.setLineDash(dash);g.lineWidth=1;
+      g.beginPath();g.moveTo(0,Y(v));g.lineTo(w,Y(v));g.stroke();g.restore();
+    }
+    line(S.equityPassLevel,'rgba(0,242,255,.45)',[5,4]);
+    line(S.maxLossLimitEquityLevel,'rgba(255,82,82,.45)',[5,4]);
+    line(S.startingBalance,'rgba(128,128,128,.4)',[2,3]);
+
+    var last=vals[vals.length-1], up=last>=(S.startingBalance||0);
+    var col=up?'#00f2ff':'#ff5252';
+    // alan dolgusu
+    var grd=g.createLinearGradient(0,0,0,hh);
+    grd.addColorStop(0,up?'rgba(0,242,255,.18)':'rgba(255,82,82,.18)');
+    grd.addColorStop(1,'rgba(0,0,0,0)');
+    g.beginPath(); g.moveTo(X(0),Y(vals[0]));
+    pts.forEach(function(p,i){g.lineTo(X(i),Y(p.value));});
+    g.lineTo(X(pts.length-1),hh); g.lineTo(X(0),hh); g.closePath();
+    g.fillStyle=grd; g.fill();
+    // çizgi
+    g.beginPath();
+    pts.forEach(function(p,i){ i?g.lineTo(X(i),Y(p.value)):g.moveTo(X(i),Y(p.value)); });
+    g.strokeStyle=col; g.lineWidth=2; g.stroke();
+    // son nokta
+    g.beginPath(); g.arc(X(pts.length-1),Y(last),3.5,0,Math.PI*2);
+    g.fillStyle=col; g.fill();
+  }
+
+  function fail(msg){
+    app.innerHTML='<div class="state"><b>Veriler şu an alınamıyor</b>'+esc(msg||'')+
+      '<br><button class="retry" id="rt">Tekrar dene</button></div>';
+    var b=document.getElementById('rt');
+    if(b)b.addEventListener('click',load);
+  }
+
+  function load(){
+    fetch(API,{cache:'no-store'})
+      .then(function(r){ if(!r.ok)throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(j){
+        if(!j||!j.statistics)throw new Error('beklenmeyen yanıt');
+        data=j;
+        // equity eğrisi başarısız olsa da sayfa çalışsın
+        return fetch(API+'/growth',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({filter:'daily'})
+        }).then(function(r){return r.ok?r.json():null;})
+          .then(function(g){ if(Array.isArray(g))growth=g; })
+          .catch(function(){});
+      })
+      .then(render)
+      .catch(function(e){ fail(e.message); });
+  }
+
+  load();
+  setInterval(load,60000);
+  window.addEventListener('resize',function(){
+    var pts=(growth||[]).filter(function(x){return x.name==='EQUITY';});
+    if(data&&pts.length>1)draw(pts,data.statistics);
+  });
+})();
+</script>
+</body>
+</html>

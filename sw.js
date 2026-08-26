@@ -2,7 +2,7 @@
    Amaç: "ana ekrana ekle" (PWA) + çevrimdışı kabuk + haber alarmı bildirimleri.
    Not: uygulama tek dosya (trade.html/index.html) + Supabase/canlı veri kullanır;
    bu yüzden veri istekleri DAİMA ağdan (network-first), yalnızca uygulama kabuğu cache'lenir. */
-const CACHE = 'ktc-shell-v2';
+const CACHE = 'ktc-shell-v3';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
