@@ -1691,7 +1691,7 @@
           <input id="c-sym" class="sp-other" placeholder="diğer..." autocomplete="off" />
         </div>
         <textarea id="c-text" class="c-area" placeholder="Analizini / bias'ını yaz... (örn. EUR/USD 1.0820 desteğinden 1.0910'a kadar yükseliş bekliyorum)"></textarea>
-        <div class="c-tp" title="Hedef ve stop girersen sonuç OTOMATİK işaretlenir: fiyat TP'ye değerse ✅ tuttu, SL'e değerse ❌ stop (5 dk'da bir kontrol edilir). Metinde 'TP: / SL:' yazarsan da otomatik algılanır.">
+        <div class="c-tp" title="TP ve SL girersen sonuç OTOMATİK işaretlenir: fiyat TP'ye değerse 🎯 TP, SL'e değerse 🛑 SL (5 dk'da bir kontrol edilir). Metinde 'TP: / SL:' yazarsan da otomatik algılanır.">
           <span class="c-tp-lbl">🎯 Sonuç takibi — otomatik 🤖 (opsiyonel):</span>
           <input id="c-target" class="c-tp-in" placeholder="Hedef fiyat" autocomplete="off">
           <input id="c-stop" class="c-tp-in" placeholder="Stop fiyat" autocomplete="off">
@@ -3375,8 +3375,8 @@ function renderSentiment(){
 }
 function outcomeBadge(p){
   const auto=p.outcomeAuto?' title="Fiyat verisiyle otomatik işaretlendi 🤖"':'';
-  if(p.outcome==='hit')return '<span class="oc-badge hit"'+auto+'>✅ Hedef tuttu'+(p.outcomeAuto?' 🤖':'')+'</span>';
-  if(p.outcome==='miss')return '<span class="oc-badge miss"'+auto+'>❌ Stop oldu'+(p.outcomeAuto?' 🤖':'')+'</span>';
+  if(p.outcome==='hit')return '<span class="oc-badge hit"'+auto+'>🎯 TP'+(p.outcomeAuto?' 🤖':'')+'</span>';
+  if(p.outcome==='miss')return '<span class="oc-badge miss"'+auto+'>🛑 SL'+(p.outcomeAuto?' 🤖':'')+'</span>';
   if(p.outcome==='open'||(p.target&&!p.outcome))return '<span class="oc-badge open" title="Hedef/stop girildi — fiyat TP veya SL\'e değince otomatik işaretlenecek">⏳ Devam ediyor</span>';
   return '';
 }
@@ -3765,9 +3765,9 @@ function renderFeed(){
         ${canEdit?`<span class="edit-btn" title="Paylaşımını düzenle">✏️ Düzenle</span>`:''}
         ${canDel?`<span class="del-btn" title="${currentUser.isAdmin?'Yönetici: paylaşımı sil':'Paylaşımını sil'}">🗑 Sil</span>`:''}
       </div>
-      ${(canEdit&&(p.target||p.outcome))?`<div class="post-outcome">Sonucu işaretle:
-        <button class="oc-btn oc-hit${p.outcome==='hit'?' on':''}" data-oc="hit">✅ Tuttu</button>
-        <button class="oc-btn oc-miss${p.outcome==='miss'?' on':''}" data-oc="miss">❌ Tutmadı</button>
+      ${(canEdit&&(p.target||p.outcome))?`<div class="post-outcome">Sonuç:
+        <button class="oc-btn oc-hit${p.outcome==='hit'?' on':''}" data-oc="hit">🎯 TP</button>
+        <button class="oc-btn oc-miss${p.outcome==='miss'?' on':''}" data-oc="miss">🛑 SL</button>
         <button class="oc-btn oc-open${p.outcome==='open'||!p.outcome?' on':''}" data-oc="open">⏳ Devam</button>
       </div>`:''}
       <div class="comments ${(openComments.has(p.id)||feedChannel==='ztf')?'open':''}">
@@ -6166,9 +6166,9 @@ function renderStats(){
     const openN=feed.filter(p=>chOf(p)==='main'&&p.uid===currentUser.id&&p.outcome==='open').length;
     if(mine.length){
       const rate=Math.round(hits/mine.length*100);
-      hitStr='<div class="st-hitrate"><span class="st-hr-big '+(rate>=50?'pos':'neg')+'">%'+rate+'</span><span class="st-hr-lbl">paylaşım isabet oranı<br><small>'+hits+'/'+mine.length+' tuttu'+(openN?' · '+openN+' devam ediyor':'')+'</small></span></div>';
+      hitStr='<div class="st-hitrate"><span class="st-hr-big '+(rate>=50?'pos':'neg')+'">%'+rate+'</span><span class="st-hr-lbl">paylaşım isabet oranı<br><small>'+hits+'/'+mine.length+' TP'+(openN?' · '+openN+' devam ediyor':'')+'</small></span></div>';
     } else if(openN){
-      hitStr='<div class="st-comm" style="margin-bottom:10px">📌 '+openN+' paylaşımın sonucu bekleniyor. Kapandıkça "Tuttu/Tutmadı" işaretle → isabet oranın burada birikir.</div>';
+      hitStr='<div class="st-comm" style="margin-bottom:10px">📌 '+openN+' paylaşımın sonucu bekleniyor. Kapandıkça TP/SL işaretle → isabet oranın burada birikir.</div>';
     } else {
       hitStr='<div class="st-comm" style="margin-bottom:10px">💡 Paylaşırken hedef/stop girip sonucu işaretlersen, isabet oranın burada birikir.</div>';
     }
