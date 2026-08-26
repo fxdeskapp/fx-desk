@@ -1139,6 +1139,7 @@
   .al-when{display:flex;gap:14px;flex-wrap:wrap}
   .al-when label{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer}
   #al-opts.off{opacity:.45;pointer-events:none}
+  #ap-opts.off{opacity:.45;pointer-events:none}
 
   .beta-thanks{color:var(--green);font-size:13px;margin-top:10px;font-weight:600}
 
@@ -1911,6 +1912,21 @@
           <div class="set-row"><span>Ses seviyesi</span><input type="range" id="al-vol" min="0" max="100" step="5" style="flex:1;max-width:220px"></div>
         </div>
       </div>
+      <div class="set-card"><h3>📣 Yönetici paylaşımı bildirimi</h3>
+        <div class="set-row"><span>🔔 Yönetici paylaşım yapınca uyar <small class="set-muted" style="display:block;font-weight:400">Yönetici/moderatör Paylaşımlar'a yeni gönderi attığında sesli uyarı + bildirim (hangi sekmede olursan ol)</small></span><label class="switch"><input type="checkbox" id="ap-on"><span class="switch-tr"></span></label></div>
+        <div id="ap-opts">
+          <div class="set-row"><span>Uyarı sesi</span><div class="set-inline">
+            <select id="ap-sound">
+              <option value="chime">Çan</option>
+              <option value="beep">Bip (kısa)</option>
+              <option value="alert">Uyarı (çift ton)</option>
+              <option value="ding">Ding</option>
+            </select>
+            <button id="ap-test" type="button">▶ Dene</button>
+          </div></div>
+          <div class="set-row"><span>Ses seviyesi</span><input type="range" id="ap-vol" min="0" max="100" step="5" style="flex:1;max-width:220px"></div>
+        </div>
+      </div>
       <div class="set-card"><h3>💾 Veri yönetimi</h3>
         <div class="set-inline"><button id="set-export">Raporlar yedeğini indir (JSON)</button><label class="set-importlbl">İçe aktar<input id="set-import" type="file" accept=".json" hidden></label></div>
         <div><button id="set-clear" class="set-danger">Tüm verilerimi temizle</button><button id="set-delacc" class="set-danger">Hesabımı sil</button></div>
@@ -2556,6 +2572,91 @@ function bindAlarmUI(){
   syncAlarmUI();
 }
 bindAlarmUI();
+
+/* ===== YÖNETİCİ PAYLAŞIM BİLDİRİMİ =====
+   Yönetici/moderatör Paylaşımlar'a yeni gönderi attığında ses + toast + OS bildirimi.
+   Hangi sekmede olursan ol çalışır (Paylaşımlar açık olmak zorunda değil).
+   Yöntem: 45 sn'de bir yalnızca EN YENİ gönderiyi çeker (hafif sorgu); yazarı
+   yönetici/mod ise ve daha önce duyurulmadıysa uyarır. Kendi gönderin uyarmaz. */
+const AP_DEF={on:true,sound:'chime',vol:70};
+let apCfg=loadApCfg(), _apSeen=null, _apStaffIds=null, _apStaffAt=0, _apBusy=false;
+function loadApCfg(){
+  try{const s=JSON.parse(localStorage.getItem('fxdesk_adminpost')||'null');if(s)return Object.assign({},AP_DEF,s);}catch(e){}
+  return Object.assign({},AP_DEF);
+}
+function saveApCfg(){try{localStorage.setItem('fxdesk_adminpost',JSON.stringify(apCfg));}catch(e){}}
+function apSeenKey(){return 'fxdesk_adminpost_seen_'+((currentUser&&currentUser.id)||'anon');}
+function apPlay(){ playTone(AL_PRESETS[apCfg.sound]||AL_PRESETS.chime, apCfg.vol|0); }
+
+/* yönetici/moderatör id listesi — 10 dk cache'li */
+async function apStaffIds(){
+  if(_apStaffIds && Date.now()-_apStaffAt<10*60*1000) return _apStaffIds;
+  try{
+    const {data,error}=await sb.from('profiles').select('id,is_admin,is_moderator');
+    if(error)throw error;
+    _apStaffIds=new Set((data||[]).filter(p=>p.is_admin||p.is_moderator).map(p=>p.id));
+    _apStaffAt=Date.now();
+  }catch(e){ if(!_apStaffIds)_apStaffIds=new Set(); }
+  return _apStaffIds;
+}
+function showAdminPostToast(p){
+  let t=document.getElementById('ap-toast');
+  if(!t){t=document.createElement('div');t.id='ap-toast';t.style.cssText='position:fixed;right:18px;bottom:18px;z-index:9999;background:var(--panel);border:1px solid var(--accent);border-left:4px solid var(--accent);border-radius:12px;padding:12px 16px;box-shadow:0 10px 30px rgba(0,0,0,.4);max-width:340px;font-size:13px;color:var(--text);animation:alIn .25s ease;cursor:pointer';
+    t.addEventListener('click',()=>{t.style.display='none';try{switchTab('feed');}catch(e){}});
+    document.body.appendChild(t);}
+  const biasTxt=p.bias==='long'?'📈 LONG':(p.bias==='short'?'📉 SHORT':'');
+  const snip=(p.text||'').slice(0,90)+((p.text||'').length>90?'…':'');
+  t.innerHTML='<div style="font-weight:700;margin-bottom:2px">📣 Yönetici paylaşımı</div>'+
+    '<div><b>'+esc(p.username||'Yönetici')+'</b>'+(p.symbol?' · '+esc(p.symbol):'')+(biasTxt?' · '+biasTxt:'')+'</div>'+
+    (snip?'<div style="color:var(--muted);font-size:12px;margin-top:3px">'+esc(snip)+'</div>':'')+
+    '<div style="color:var(--muted);font-size:11px;margin-top:5px">Görmek için tıkla →</div>';
+  t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>{t.style.display='none';},12000);
+  if(typeof notifyOS==='function'){
+    notifyOS('📣 Yönetici paylaşımı', (p.username||'Yönetici')+(p.symbol?' · '+p.symbol:'')+(biasTxt?' · '+biasTxt:'')+(snip?'\n'+snip:''), 'ktc-ap-'+p.id);
+  }
+}
+async function checkAdminPosts(){
+  if(DEMO||!sb||!currentUser||!apCfg.on||_apBusy)return;
+  _apBusy=true;
+  try{
+    const {data,error}=await sb.from('posts').select('id,user_id,username,symbol,bias,text,created_at')
+      .order('created_at',{ascending:false}).limit(1);
+    if(error||!data||!data.length)return;
+    const p=data[0];
+    // ilk açılış: mevcut son gönderiyi "görüldü" say, geçmişi çalma
+    if(_apSeen==null){ _apSeen=localStorage.getItem(apSeenKey())||''; if(!_apSeen){ _apSeen=p.id; try{localStorage.setItem(apSeenKey(),p.id);}catch(e){} return; } }
+    if(p.id===_apSeen)return;
+    _apSeen=p.id; try{localStorage.setItem(apSeenKey(),p.id);}catch(e){}
+    if(p.user_id===currentUser.id)return;                       // kendi gönderin çalmasın
+    if(Date.now()-new Date(p.created_at).getTime()>30*60*1000)return; // 30 dk'dan eskiyse çalma
+    const staff=await apStaffIds();
+    if(!staff.has(p.user_id))return;                            // yalnızca yönetici/mod
+    apPlay(); showAdminPostToast(p);
+    const fv=document.getElementById('view-feed');
+    if(fv&&fv.style.display!=='none'&&typeof refreshFeed==='function')refreshFeed();
+  }catch(e){}finally{_apBusy=false;}
+}
+setInterval(checkAdminPosts,45000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible')checkAdminPosts(); });
+
+function syncApUI(){
+  const on=document.getElementById('ap-on'); if(!on)return;
+  on.checked=apCfg.on;
+  document.getElementById('ap-sound').value=apCfg.sound;
+  document.getElementById('ap-vol').value=apCfg.vol;
+  document.getElementById('ap-opts').classList.toggle('off',!apCfg.on);
+}
+function bindApUI(){
+  const on=document.getElementById('ap-on'); if(!on||on._bound)return; on._bound=true;
+  on.addEventListener('change',()=>{apCfg.on=on.checked;if(on.checked){alCtx();
+    try{if('Notification'in window && Notification.permission==='default')Notification.requestPermission();}catch(e){}
+  }saveApCfg();syncApUI();});
+  document.getElementById('ap-sound').addEventListener('change',ev=>{apCfg.sound=ev.target.value;saveApCfg();});
+  document.getElementById('ap-vol').addEventListener('input',ev=>{apCfg.vol=+ev.target.value;saveApCfg();});
+  document.getElementById('ap-test').addEventListener('click',()=>{alCtx();apPlay();});
+  syncApUI();
+}
+bindApUI();
 
 /* filtre kontrolleri */
 document.querySelectorAll('#cal-imp button').forEach(b=>b.addEventListener('click',()=>{
