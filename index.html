@@ -317,6 +317,29 @@
   .ap-toggle:hover{color:var(--text)}
   .ap-toggle.on{background:var(--green);border-color:var(--green);color:#fff}
   .ap-toggle.blocked{background:var(--panel-2);border-color:var(--red);color:var(--red)}
+  /* ---- Kanal sekmeleri (Topluluk / Zero to Funded) ---- */
+  .ch-tabs{display:flex;gap:8px;margin:0 0 16px;border-bottom:1px solid var(--border);padding-bottom:0}
+  .ch-tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:9px 4px;margin-bottom:-1px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:.12s}
+  .ch-tab:hover{color:var(--text)}
+  .ch-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  /* ---- Zero to Funded başlık + istatistikler ---- */
+  .ztf-head{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:18px}
+  .ztf-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .ztf-head h3{font-size:16px;font-weight:700;margin-bottom:3px}
+  .ztf-sub{font-size:12px;color:var(--muted);line-height:1.5}
+  .ztf-cog{background:var(--panel-2);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:5px 9px;cursor:pointer;font-family:inherit;font-size:13px;flex-shrink:0}
+  .ztf-cog:hover{color:var(--text)}
+  .ztf-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px;margin-top:14px}
+  .ztf-st{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 11px}
+  .ztf-st-l{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:.02em;margin-bottom:3px}
+  .ztf-st-v{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+  .ztf-st-v.pos{color:var(--green)} .ztf-st-v.neg{color:var(--red)}
+  .ztf-prog{margin-top:13px}
+  .ztf-bar{height:8px;background:var(--panel-2);border:1px solid var(--border);border-radius:20px;overflow:hidden;position:relative}
+  .ztf-fill{height:100%;background:var(--green);transition:width .3s}
+  .ztf-fill.neg{background:var(--red)}
+  .ztf-plabel{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:5px;gap:8px}
+  .ztf-empty{background:var(--panel);border:1px dashed var(--border);border-radius:var(--radius);padding:26px 18px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
   .feed-symfilter{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 18px}
   .fsf-lbl{font-size:12px;color:var(--muted);font-weight:600;margin-right:2px}
   .fsf{background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.12s;display:inline-flex;align-items:center;gap:6px}
@@ -1548,6 +1571,26 @@
         </div>
         <button id="ap-toggle" class="ap-toggle" type="button" title="Yönetici paylaşım bildirimi">🔔 Bildirim</button>
       </div>
+
+      <!-- kanal sekmeleri: topluluk akışı / Zero to Funded -->
+      <div class="ch-tabs" id="ch-tabs">
+        <button class="ch-tab active" data-ch="main">📣 Topluluk</button>
+        <button class="ch-tab" data-ch="ztf">🎯 Zero to Funded</button>
+      </div>
+
+      <!-- Zero to Funded başlığı + istatistik şeridi (yalnızca ztf kanalında) -->
+      <div id="ztf-head" class="ztf-head" style="display:none">
+        <div class="ztf-title">
+          <div>
+            <h3>🎯 Zero to Funded</h3>
+            <div class="ztf-sub" id="ztf-sub">50K tek aşamalı BEM hesabı — tüm işlemler burada, şeffaf şekilde.</div>
+          </div>
+          <button id="ztf-settings" class="ztf-cog" type="button" title="Hesap ayarları" style="display:none">⚙️</button>
+        </div>
+        <div class="ztf-stats" id="ztf-stats"></div>
+        <div class="ztf-prog" id="ztf-prog"></div>
+      </div>
+
       <div class="week-top" id="week-top" style="display:none"></div>
       <div class="senti" id="senti" style="display:none"></div>
 
@@ -3007,6 +3050,7 @@ let composeImgs=[];           // paylaşıma eklenen görseller (en fazla 3)
 const MAX_IMGS=3;
 let feedFilter='all';
 let feedSym='all';            // aktif parite filtresi (Paylaşımlar)
+let feedChannel='main';       // aktif kanal: 'main' (topluluk) | 'ztf' (Zero to Funded)
 /* parite filtresi: sabit sekmeler (sırasıyla) — her zaman görünür */
 function feedSymKey(s){return (s||'').toString().toUpperCase().replace(/[^A-Z0-9.]/g,'');}
 const ALT_TOKENS=['SOL','XRP','ADA','AVAX','BNB','DOGE','DOT','MATIC','POL','LINK','TRX','LTC','BCH','SHIB','ATOM','UNI','NEAR','APT','ARB','PEPE','SUI','TON','XLM','ETC','FIL','ICP','HBAR','VET','ALGO','AAVE','INJ','SEI','RNDR','RENDER','FET','TIA','WIF','BONK','FLOKI','RUNE','GALA','SAND','MANA','AXS','FTM','EGLD','XMR','XTZ','CRO','KAS','ONDO','JUP','PYTH','OP'];
@@ -3024,7 +3068,7 @@ function postHasSym(p,key){ const k=feedSymKey(p.symbol); if(!k)return false; co
 function renderSymFilter(){
   const box=document.getElementById('feed-symfilter'); if(!box)return;
   const counts={}; FEED_TABS.forEach(t=>counts[t.k]=0);
-  feed.forEach(p=>{ if(hidden.has(p.id))return; const k=feedSymKey(p.symbol); if(!k)return; FEED_TABS.forEach(t=>{if(t.t(k))counts[t.k]++;}); });
+  feed.forEach(p=>{ if(hidden.has(p.id)||chOf(p)!==feedChannel)return; const k=feedSymKey(p.symbol); if(!k)return; FEED_TABS.forEach(t=>{if(t.t(k))counts[t.k]++;}); });
   if(feedSym!=='all'&&!FEED_TABS.some(t=>t.k===feedSym))feedSym='all';
   box.style.display='flex';
   box.innerHTML='<span class="fsf-lbl">🔎 Parite:</span>'
@@ -3204,7 +3248,7 @@ function renderWeekTop(){
   const box=document.getElementById('week-top'); if(!box)return;
   const weekAgo=Date.now()-7*24*3600e3;
   // son 7 gün · en az 3 toplam oy · gizli değil · net skor (katılıyorum − katılmıyorum) en yüksek
-  const cand=feed.filter(p=>p.ts>=weekAgo && !hidden.has(p.id) && (p.votes.agree+p.votes.disagree+p.votes.neutral)>=3)
+  const cand=feed.filter(p=>chOf(p)==='main' && p.ts>=weekAgo && !hidden.has(p.id) && (p.votes.agree+p.votes.disagree+p.votes.neutral)>=3)
     .map(p=>({p,net:p.votes.agree-p.votes.disagree,tot:p.votes.agree+p.votes.disagree+p.votes.neutral}))
     .filter(x=>x.net>0)
     .sort((a,b)=>b.net-a.net||b.tot-a.tot||b.p.ts-a.p.ts);
@@ -3228,7 +3272,7 @@ function renderWeekTop(){
 function renderSentiment(){
   const box=document.getElementById('senti'); if(!box)return;
   const agg={};
-  feed.forEach(p=>{ if(p.bias!=='long'&&p.bias!=='short')return; const k=p.symbol||'—'; const a=agg[k]||(agg[k]={l:0,s:0}); if(p.bias==='long')a.l++; else a.s++; });
+  feed.forEach(p=>{ if(chOf(p)!=='main')return; if(p.bias!=='long'&&p.bias!=='short')return; const k=p.symbol||'—'; const a=agg[k]||(agg[k]={l:0,s:0}); if(p.bias==='long')a.l++; else a.s++; });
   const arr=Object.entries(agg).map(([sym,v])=>({sym,l:v.l,s:v.s,t:v.l+v.s})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t).slice(0,6);
   if(!arr.length){box.style.display='none';return;}
   box.style.display='block';
@@ -3256,15 +3300,125 @@ async function setOutcome(id,oc){
   }else saveFeed();
   renderFeed();
 }
+/* ================= ZERO TO FUNDED =================
+   Paylaşımlar içinde ayrı kanal: yalnızca yönetici gönderi atar (RLS ile
+   sunucu tarafında da zorunlu). Amaç: prop hesabındaki işlemleri şeffaf
+   biçimde yayınlamak ve veri toplamak. R kazancı gönderi metnindeki
+   "R: +1.8" / "sonuç: -1R" gibi ifadelerden okunur. */
+const ZTF_CFG_KEY='fxdesk_ztf_cfg';
+const ZTF_DEF={size:50000,target:8,dd:6,ddDaily:3,name:'50K BEM · tek aşamalı'};
+function chOf(p){return p.channel||'main';}
+function isZtfAuthor(){return !!(currentUser&&currentUser.isAdmin);}
+function ztfCfg(){
+  try{const s=JSON.parse(localStorage.getItem(ZTF_CFG_KEY)||'null');if(s)return Object.assign({},ZTF_DEF,s);}catch(e){}
+  return Object.assign({},ZTF_DEF);
+}
+function saveZtfCfg(c){try{localStorage.setItem(ZTF_CFG_KEY,JSON.stringify(c));}catch(e){}}
+/* Gönderi metninden R değeri çek: "R: +1.8", "+2R", "sonuç -1R" vb. */
+function parseR(text){
+  if(!text)return null;
+  let m=text.match(/(?:^|[\s(])R\s*[:=]\s*([+-]?\d+(?:[.,]\d+)?)/i);
+  if(!m)m=text.match(/([+-]?\d+(?:[.,]\d+)?)\s*R\b/i);
+  if(!m)return null;
+  const v=parseFloat(m[1].replace(',','.'));
+  return isFinite(v)?v:null;
+}
+/* Bir ztf gönderisinin sonucunu R olarak döndür (yoksa outcome'dan tahmin et) */
+function ztfR(p){
+  const r=parseR(p.text);
+  if(r!=null)return r;
+  if(p.outcome==='hit')return 1;      // R yazılmamışsa kaba varsayım
+  if(p.outcome==='miss')return -1;
+  return null;
+}
+function ztfPosts(){return feed.filter(p=>chOf(p)==='ztf').sort((a,b)=>a.ts-b.ts);}
+function renderZtf(){
+  const cfg=ztfCfg();
+  const sub=document.getElementById('ztf-sub');
+  if(sub)sub.textContent=cfg.name+' — tüm işlemler burada, şeffaf şekilde.';
+  const posts=ztfPosts();
+  const closed=posts.filter(p=>p.outcome==='hit'||p.outcome==='miss');
+  const rs=closed.map(ztfR).filter(v=>v!=null);
+  const totR=rs.reduce((a,b)=>a+b,0);
+  const wins=closed.filter(p=>p.outcome==='hit').length;
+  const wr=closed.length?Math.round(wins/closed.length*100):0;
+  const open=posts.filter(p=>p.outcome==='open'||(p.target&&!p.outcome)).length;
+  const st=document.getElementById('ztf-stats');
+  if(st){
+    const cell=(l,v,cls)=>'<div class="ztf-st"><div class="ztf-st-l">'+l+'</div><div class="ztf-st-v'+(cls?' '+cls:'')+'">'+v+'</div></div>';
+    st.innerHTML=
+      cell('İŞLEM',posts.length,'')+
+      cell('KAPANAN',closed.length,'')+
+      cell('AÇIK',open,'')+
+      cell('İSABET','%'+wr,wr>=50?'pos':(closed.length?'neg':''))+
+      cell('TOPLAM R',(totR>=0?'+':'')+totR.toFixed(1),totR>0?'pos':(totR<0?'neg':''));
+  }
+  // hedefe ilerleme: R yerine yüzde hedefi (varsayılan %8) — 1R ≈ %1 varsayımı yok,
+  // bu yüzden ilerleme R toplamının hedef R'ye oranı olarak gösterilir.
+  const pr=document.getElementById('ztf-prog');
+  if(pr){
+    const goalR=cfg.target;                  // hedef: kaç R kazanç
+    const pct=goalR>0?Math.max(0,Math.min(100,totR/goalR*100)):0;
+    pr.innerHTML=
+      '<div class="ztf-bar"><div class="ztf-fill'+(totR<0?' neg':'')+'" style="width:'+(totR<0?Math.min(100,Math.abs(totR)/goalR*100):pct)+'%"></div></div>'+
+      '<div class="ztf-plabel"><span>'+(totR>=0?'Hedefe ilerleme: %'+Math.round(pct):'⚠️ Zararda: '+totR.toFixed(1)+'R')+'</span>'+
+      '<span>Hedef +'+goalR+'R · Max DD '+cfg.dd+'R</span></div>';
+  }
+}
+function applyChannelUI(){
+  const ztf=feedChannel==='ztf';
+  document.querySelectorAll('.ch-tab').forEach(b=>b.classList.toggle('active',b.dataset.ch===feedChannel));
+  const hd=document.getElementById('ztf-head'); if(hd)hd.style.display=ztf?'block':'none';
+  const cog=document.getElementById('ztf-settings'); if(cog)cog.style.display=(ztf&&isZtfAuthor())?'':'none';
+  // ztf kanalında yalnızca yönetici paylaşım formunu görür
+  const comp=document.querySelector('#view-feed .compose');
+  if(comp)comp.style.display=(ztf&&!isZtfAuthor())?'none':'';
+  // ztf'de topluluk widget'ları gizlenir
+  const wt=document.getElementById('week-top'); if(wt&&ztf)wt.style.display='none';
+  const se=document.getElementById('senti');   if(se&&ztf)se.style.display='none';
+  const disc=document.querySelector('#view-feed .feed-disclaimer'); if(disc)disc.style.display=ztf?'none':'';
+  // compose ipucu metnini kanala göre değiştir
+  const ta=document.getElementById('c-text');
+  if(ta)ta.placeholder=ztf
+    ? "İşlem detayı... (örn. EUR/USD short · giriş 1.0850 · SL 1.0880 · TP 1.0790 · R: +2.0 · sebep: Londra seansı likidite süpürmesi)"
+    : "Analizini / bias'ını yaz... (örn. EUR/USD 1.0820 desteğinden 1.0910'a kadar yükseliş bekliyorum)";
+}
+function switchChannel(ch){
+  feedChannel=(ch==='ztf')?'ztf':'main';
+  feedFilter='all'; feedSym='all';
+  document.querySelectorAll('.ff').forEach(x=>x.classList.toggle('active',x.dataset.f==='all'));
+  try{localStorage.setItem('fxdesk_feed_channel',feedChannel);}catch(e){}
+  renderFeed();
+}
+document.querySelectorAll('.ch-tab').forEach(b=>b.addEventListener('click',()=>switchChannel(b.dataset.ch)));
+try{const c=localStorage.getItem('fxdesk_feed_channel'); if(c==='ztf')feedChannel='ztf';}catch(e){}
+/* hesap ayarları (yalnızca yönetici) */
+const _ztfCog=document.getElementById('ztf-settings');
+if(_ztfCog)_ztfCog.addEventListener('click',()=>{
+  if(!isZtfAuthor())return;
+  const c=ztfCfg();
+  const name=prompt('Hesap adı:',c.name); if(name===null)return;
+  const target=prompt('Hedef kazanç (R cinsinden):',c.target); if(target===null)return;
+  const dd=prompt('Maksimum kayıp (R cinsinden):',c.dd); if(dd===null)return;
+  const nc=Object.assign({},c,{name:name.trim()||c.name,target:parseFloat(target)||c.target,dd:parseFloat(dd)||c.dd});
+  saveZtfCfg(nc); renderFeed();
+});
+
 function renderFeed(){
-  renderWeekTop();
-  renderSentiment();
+  applyChannelUI();
+  const ztf=feedChannel==='ztf';
+  if(ztf)renderZtf(); else {renderWeekTop();renderSentiment();}
   renderSymFilter();
   refreshAvatars();
   const list=document.getElementById('feed-list');
-  const items=feed.filter(p=>(feedFilter==='all'||p.bias===feedFilter)&&(feedSym==='all'||postHasSym(p,feedSym))&&!hidden.has(p.id)).sort((a,b)=>b.ts-a.ts);
+  const items=feed.filter(p=>chOf(p)===feedChannel&&(feedFilter==='all'||p.bias===feedFilter)&&(feedSym==='all'||postHasSym(p,feedSym))&&!hidden.has(p.id)).sort((a,b)=>b.ts-a.ts);
   list.innerHTML='';
-  if(!items.length){list.innerHTML='<div class="feed-empty">Bu filtrede paylaşım yok. İlk paylaşımı sen yap! ☝️</div>';return;}
+  if(!items.length){
+    list.innerHTML=ztf
+      ? '<div class="ztf-empty">Bu hesapta henüz işlem paylaşılmadı.<br>'+(isZtfAuthor()?'Yukarıdaki formdan ilk işlemini ekleyebilirsin. ☝️':'Yönetici işlem ekledikçe burada görünecek.')+'</div>'
+      : '<div class="feed-empty">Bu filtrede paylaşım yok. İlk paylaşımı sen yap! ☝️</div>';
+    return;
+  }
   items.forEach(p=>{
     const total=p.votes.agree+p.votes.disagree+p.votes.neutral;
     const pct=v=>total?Math.round(v/total*100):0;
@@ -3480,6 +3634,9 @@ document.getElementById('c-post').addEventListener('click',()=>{
   // alanlar boşsa metindeki TP/SL'i otomatik çek (şablonla uyumlu) — ikisi de bulunursa kullan
   if(!target&&!stop){const g=parseTpSlFromText(text); if(g.target&&g.stop){target=g.target;stop=g.stop;}}
   const outcome=target?'open':null;   // hedef girildiyse "devam ediyor" olarak başlar
+  // hangi kanala yazılacak: ztf yalnızca yöneticiye açık (sunucuda RLS de engeller)
+  const postCh=(feedChannel==='ztf'&&isZtfAuthor())?'ztf':'main';
+  if(feedChannel==='ztf'&&!isZtfAuthor()){alert('Zero to Funded kanalına yalnızca yönetici paylaşım yapabilir.');return;}
   if(!sym&&!text&&!composeImgs.length){alert('Lütfen en az bir parite, analiz yazısı veya görsel ekle.');return;}
   const resetCompose=()=>{document.getElementById('c-sym').value='';document.getElementById('c-text').value='';document.getElementById('c-target').value='';document.getElementById('c-stop').value='';composeSym='';document.querySelectorAll('.spx').forEach(x=>x.classList.remove('sel'));clearComposeImgs();feedFilter='all';feedSym='all';document.querySelectorAll('.ff').forEach(x=>x.classList.toggle('active',x.dataset.f==='all'));};
   if(!DEMO){
@@ -3489,18 +3646,18 @@ document.getElementById('c-post').addEventListener('click',()=>{
         const urls=[]; for(const d of composeImgs){const u=await uploadShot(d); if(u)urls.push(u);}
         img_url = urls.length>1?JSON.stringify(urls):(urls[0]||null);
       }
-      const row={user_id:currentUser.id,username:currentUser.username,symbol:sym||'—',bias:composeBias,text,img_url,target:target||null,stop:stop||null,outcome};
+      const row={user_id:currentUser.id,username:currentUser.username,symbol:sym||'—',bias:composeBias,text,img_url,target:target||null,stop:stop||null,outcome,channel:postCh};
       let error=null;
       try{const r=await sb.from('posts').insert(row);error=r.error;}catch(e){error=e;}
       // fail-safe: outcome kolonları yoksa (migration atlanmış) onlarsız tekrar dene
       if(error&&/target|stop|outcome|column/i.test(error.message||'')){
-        try{const r2=await sb.from('posts').insert({user_id:currentUser.id,username:currentUser.username,symbol:sym||'—',bias:composeBias,text,img_url});error=r2.error;}catch(e){error=e;}
+        try{const r2=await sb.from('posts').insert({user_id:currentUser.id,username:currentUser.username,symbol:sym||'—',bias:composeBias,text,img_url,channel:postCh});error=r2.error;}catch(e){error=e;}
       }
       if(error){console.warn(error);alert('Paylaşım kaydedilemedi: '+(error.message||error));return;}
       resetCompose();await refreshFeed(); })();
     return;
   }
-  feed.push({id:'p'+Date.now(),uid:currentUser.id,name:currentUser.username,symbol:sym||'—',bias:composeBias,text,imgs:composeImgs.slice(),target:target||null,stop:stop||null,outcome,ts:Date.now(),votes:{agree:0,disagree:0,neutral:0},comments:[]});
+  feed.push({id:'p'+Date.now(),uid:currentUser.id,name:currentUser.username,symbol:sym||'—',bias:composeBias,text,imgs:composeImgs.slice(),target:target||null,stop:stop||null,outcome,channel:postCh,ts:Date.now(),votes:{agree:0,disagree:0,neutral:0},comments:[]});
   saveFeed(); resetCompose(); renderFeed();
 });
 document.querySelectorAll('.ff').forEach(b=>b.addEventListener('click',()=>{
@@ -4606,7 +4763,7 @@ async function sbLoadFeed(){
     const vb={}; (votes||[]).forEach(v=>{const o=vb[v.post_id]||(vb[v.post_id]={agree:0,disagree:0,neutral:0});if(o[v.choice]!=null)o[v.choice]++;});
     const vl={}; (votes||[]).forEach(v=>{(vl[v.post_id]||(vl[v.post_id]=[])).push({uid:v.user_id,name:pmap[v.user_id]||'Kullanıcı',choice:v.choice});});
     const cb={}; (comments||[]).forEach(c=>{(cb[c.post_id]||(cb[c.post_id]=[])).push({id:c.id,uid:c.user_id,name:c.username,text:c.text,edited:!!c.edited,ts:new Date(c.created_at).getTime()});});
-    feed=(posts||[]).map(p=>({id:p.id,uid:p.user_id,name:p.username,symbol:p.symbol,bias:p.bias,text:p.text,edited:!!p.edited,imgs:parseImgUrl(p.img_url),target:p.target||null,stop:p.stop||null,outcome:p.outcome||null,outcomeAuto:!!p.outcome_auto,ts:new Date(p.created_at).getTime(),votes:vb[p.id]||{agree:0,disagree:0,neutral:0},voters:vl[p.id]||[],comments:cb[p.id]||[]}));
+    feed=(posts||[]).map(p=>({id:p.id,uid:p.user_id,name:p.username,symbol:p.symbol,bias:p.bias,text:p.text,edited:!!p.edited,imgs:parseImgUrl(p.img_url),target:p.target||null,stop:p.stop||null,outcome:p.outcome||null,outcomeAuto:!!p.outcome_auto,channel:p.channel||'main',ts:new Date(p.created_at).getTime(),votes:vb[p.id]||{agree:0,disagree:0,neutral:0},voters:vl[p.id]||[],comments:cb[p.id]||[]}));
     myVotes={}; if(currentUser)(votes||[]).forEach(v=>{if(v.user_id===currentUser.id)myVotes[v.post_id]=v.choice;});
     return true;
   }catch(e){console.warn('sbLoadFeed',e);return false;}
@@ -5548,9 +5705,10 @@ function renderStats(){
   // topluluk + paylaşım isabet oranı (kendi paylaşımların)
   let hitStr='';
   if(typeof feed!=='undefined'&&currentUser){
-    const mine=feed.filter(p=>p.uid===currentUser.id&&(p.outcome==='hit'||p.outcome==='miss'));
+    // yalnızca topluluk paylaşımları — Zero to Funded işlemleri kendi panosunda sayılır
+    const mine=feed.filter(p=>chOf(p)==='main'&&p.uid===currentUser.id&&(p.outcome==='hit'||p.outcome==='miss'));
     const hits=mine.filter(p=>p.outcome==='hit').length;
-    const openN=feed.filter(p=>p.uid===currentUser.id&&p.outcome==='open').length;
+    const openN=feed.filter(p=>chOf(p)==='main'&&p.uid===currentUser.id&&p.outcome==='open').length;
     if(mine.length){
       const rate=Math.round(hits/mine.length*100);
       hitStr='<div class="st-hitrate"><span class="st-hr-big '+(rate>=50?'pos':'neg')+'">%'+rate+'</span><span class="st-hr-lbl">paylaşım isabet oranı<br><small>'+hits+'/'+mine.length+' tuttu'+(openN?' · '+openN+' devam ediyor':'')+'</small></span></div>';
