@@ -536,7 +536,16 @@
   .cm-prev-x{position:absolute;top:1px;right:1px;background:rgba(0,0,0,.75);color:#fff;border:none;border-radius:4px;width:16px;height:16px;line-height:14px;font-size:11px;cursor:pointer;padding:0}
   .cm-img{margin-top:6px;max-width:260px;border-radius:8px;border:1px solid var(--border);cursor:zoom-in;display:block}
   /* görüntülenme sayacı */
-  .pv-count{color:var(--muted);font-size:12px;display:inline-flex;align-items:center;gap:3px}
+  .pv-count{color:var(--muted);font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer}
+  .pv-count:hover{color:var(--accent)}
+  /* görüntüleyen listesi — yalnızca yöneticiye görünür, tıklayınca açılır */
+  .pv-list{display:none;margin-top:9px;padding:10px 12px;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .pv-list.open{display:block}
+  .pv-hd{font-size:11.5px;color:var(--muted);font-weight:700;margin-bottom:7px}
+  .pv-only{font-weight:400;opacity:.75}
+  .pv-names{display:flex;flex-wrap:wrap;gap:5px}
+  .pv-n{background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:11.5px;color:var(--text)}
+  .pv-empty{font-size:12px;color:var(--muted)}
   .feed-empty{text-align:center;color:var(--muted);padding:46px 20px;font-size:13px}
 
   .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:200;overflow:hidden;touch-action:none}
@@ -3399,16 +3408,40 @@ async function setOutcome(id,oc){
    Kişi başına tek kayıt (aynı kişi tekrar bakınca artmaz). Sayaç herkese açık,
    ekleme yalnızca kendi adına yapılabilir (RLS). */
 let _views={};            // post_id -> sayı
+let _viewers={};          // post_id -> [{uid,name,ts}]  (yalnızca yönetici görür)
+let _viewNames={};        // uid -> kullanıcı adı (sbLoadFeed doldurur)
 let _viewSent=new Set();  // bu oturumda kaydedilenler
 function viewCount(id){return _views[id]||0;}
+/* Görüntülenme bilgisi yalnızca yöneticiye gösterilir */
+function canSeeViews(){return !!(currentUser&&currentUser.isAdmin);}
 async function loadViews(){
   if(DEMO||!sb)return;
   try{
-    const {data,error}=await sb.from('post_views').select('post_id');
+    // isimler için okuyanların id'lerini de al; profil adları sbLoadFeed'de toplanan
+    // haritadan çözülür (post_views'ta isim tutulmuyor)
+    const {data,error}=await sb.from('post_views').select('post_id,user_id,created_at');
     if(error)throw error;
-    const c={}; (data||[]).forEach(v=>{c[v.post_id]=(c[v.post_id]||0)+1;});
-    _views=c;
+    const c={}, v={};
+    (data||[]).forEach(r=>{
+      c[r.post_id]=(c[r.post_id]||0)+1;
+      (v[r.post_id]||(v[r.post_id]=[])).push({
+        uid:r.user_id,
+        name:(_viewNames[r.user_id]||'Kullanıcı'),
+        ts:r.created_at?new Date(r.created_at).getTime():0
+      });
+    });
+    Object.keys(v).forEach(k=>v[k].sort((a,b)=>b.ts-a.ts));   // en son bakan üstte
+    _views=c; _viewers=v;
   }catch(e){ /* tablo yoksa sessiz geç */ }
+}
+/* Görüntüleyenlerin isim listesi (yalnızca yönetici; tıklayınca açılır) */
+function viewersHTML(id){
+  const list=_viewers[id]||[];
+  if(!list.length)return '<div class="pv-empty">Henüz kimse görüntülemedi.</div>';
+  const fmt=ts=>ts?timeAgo(ts):'';
+  return '<div class="pv-hd">👁 '+list.length+' kişi görüntüledi <span class="pv-only">· yalnızca sana görünür</span></div>'+
+    '<div class="pv-names">'+list.map(v=>
+      '<span class="pv-n" title="'+esc(fmt(v.ts))+'">'+esc(v.name)+'</span>').join('')+'</div>';
 }
 /* Gönderi ekranda gerçekten görününce say (kaydırıp geçilen sayılmasın) */
 let _viewObs=null;
@@ -3432,7 +3465,14 @@ async function markViewed(id){
   if(!currentUser)return;
   try{
     const {error}=await sb.from('post_views').insert({post_id:id,user_id:currentUser.id});
-    if(!error){ _views[id]=(_views[id]||0)+1; const el=document.querySelector('.post[data-id="'+id+'"] .pv-count'); if(el)el.textContent='👁 '+_views[id]; }
+    if(!error){
+      _views[id]=(_views[id]||0)+1;
+      (_viewers[id]||(_viewers[id]=[])).unshift({uid:currentUser.id,name:currentUser.username,ts:Date.now()});
+      const el=document.querySelector('.post[data-id="'+id+'"] .pv-count');
+      if(el)el.textContent='👁 '+_views[id];
+      const lst=document.querySelector('.post[data-id="'+id+'"] .pv-list');
+      if(lst){const wasOpen=lst.classList.contains('open');lst.innerHTML=viewersHTML(id);if(wasOpen)lst.classList.add('open');}
+    }
   }catch(e){}
 }
 
@@ -3760,11 +3800,12 @@ function renderFeed(){
       ${votersHTML(p)}
       <div class="post-actions">
         <span class="cm-toggle">💬 ${p.comments.length} yorum${p.comments.length?' · göster/gizle':''}</span>
-        <span class="pv-count" title="Kaç kişi görüntüledi">👁 ${viewCount(p.id)}</span>
+        ${canSeeViews()?`<span class="pv-count" title="Görüntüleyenleri gör (yalnızca sana görünür)">👁 ${viewCount(p.id)}</span>`:''}
         <span class="report-btn" title="Uygunsuz içeriği bildir">🚩 Bildir</span>
         ${canEdit?`<span class="edit-btn" title="Paylaşımını düzenle">✏️ Düzenle</span>`:''}
         ${canDel?`<span class="del-btn" title="${currentUser.isAdmin?'Yönetici: paylaşımı sil':'Paylaşımını sil'}">🗑 Sil</span>`:''}
       </div>
+      ${canSeeViews()?`<div class="pv-list">${viewersHTML(p.id)}</div>`:''}
       ${(canEdit&&(p.target||p.outcome))?`<div class="post-outcome">Sonuç:
         <button class="oc-btn oc-hit${p.outcome==='hit'?' on':''}" data-oc="hit">🎯 TP</button>
         <button class="oc-btn oc-miss${p.outcome==='miss'?' on':''}" data-oc="miss">🛑 SL</button>
@@ -3806,6 +3847,8 @@ function renderFeed(){
     });
     renderCmPrev(card,p.id); updateCmPicBtn(card,p.id);
     card.querySelectorAll('.cm-img').forEach(im=>im.addEventListener('click',()=>openLightbox(im.getAttribute('src'))));
+    const pvc=card.querySelector('.pv-count'), pvl=card.querySelector('.pv-list');
+    if(pvc&&pvl)pvc.addEventListener('click',()=>pvl.classList.toggle('open'));
     card.querySelector('.report-btn').addEventListener('click',()=>reportPost(p.id));
     const db=card.querySelector('.del-btn'); if(db)db.addEventListener('click',()=>deletePost(p.id));
     const eb=card.querySelector('.edit-btn'); if(eb)eb.addEventListener('click',()=>beginPostEdit(card,p));
@@ -5215,6 +5258,7 @@ async function sbLoadFeed(){
     (posts||[]).forEach(p=>{ if(p.user_id&&p.username&&!pmap[p.user_id])pmap[p.user_id]=p.username; });
     (comments||[]).forEach(c=>{ if(c.user_id&&c.username&&!pmap[c.user_id])pmap[c.user_id]=c.username; });
     if(currentUser&&currentUser.username&&!pmap[currentUser.id])pmap[currentUser.id]=currentUser.username;
+    _viewNames=pmap;                       // görüntüleyen isimleri bu haritadan çözülür
     const vb={}; (votes||[]).forEach(v=>{const o=vb[v.post_id]||(vb[v.post_id]={agree:0,disagree:0,neutral:0});if(o[v.choice]!=null)o[v.choice]++;});
     const vl={}; (votes||[]).forEach(v=>{(vl[v.post_id]||(vl[v.post_id]=[])).push({uid:v.user_id,name:pmap[v.user_id]||'Kullanıcı',choice:v.choice});});
     const cb={}; (comments||[]).forEach(c=>{(cb[c.post_id]||(cb[c.post_id]=[])).push({id:c.id,uid:c.user_id,name:c.username,text:c.text,img_url:c.img_url||null,edited:!!c.edited,ts:new Date(c.created_at).getTime()});});
