@@ -360,6 +360,11 @@
   .ztf-fill.neg{background:var(--red)}
   .ztf-plabel{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:5px;gap:8px}
   .ztf-empty{background:var(--panel);border:1px dashed var(--border);border-radius:var(--radius);padding:26px 18px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
+  /* ---- Günlük Notlar ---- */
+  .notes-head{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px}
+  .notes-head h3{font-size:16px;font-weight:700;margin-bottom:3px}
+  .notes-sub{font-size:12px;color:var(--muted);line-height:1.5}
+  .notes-day{font-size:11.5px;color:var(--gold);font-weight:700;margin:2px 0 6px}
   /* ---- Seans performansı ---- */
   .sesstats{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;margin-bottom:16px}
   .sst-head{display:flex;align-items:center;gap:9px}
@@ -1676,6 +1681,13 @@
       <div class="ch-tabs" id="ch-tabs">
         <button class="ch-tab active" data-ch="main">📣 Topluluk</button>
         <button class="ch-tab" data-ch="ztf">🎯 Zero to Funded</button>
+        <button class="ch-tab" data-ch="notes">📓 Günlük Notlar</button>
+      </div>
+
+      <!-- Günlük Notlar başlığı (yalnızca notes kanalında) -->
+      <div id="notes-head" class="notes-head" style="display:none">
+        <h3>📓 Günlük Notlar</h3>
+        <div class="notes-sub">Gün içi düşüncelerim, grafik okumalarım ve kendime notlarım. Yorum yazabilirsin.</div>
       </div>
 
       <!-- Seans bazlı performans (sonuçlanmış paylaşımlar) -->
@@ -3957,34 +3969,44 @@ function renderZtf(){
   }
 }
 function applyChannelUI(){
-  const ztf=feedChannel==='ztf';
+  const ztf=feedChannel==='ztf', notes=feedChannel==='notes';
+  const ownerOnly=ztf||notes;                       // yalnızca yöneticinin yazdığı kanallar
   document.querySelectorAll('.ch-tab').forEach(b=>b.classList.toggle('active',b.dataset.ch===feedChannel));
   const hd=document.getElementById('ztf-head'); if(hd)hd.style.display=ztf?'block':'none';
+  const nh=document.getElementById('notes-head'); if(nh)nh.style.display=notes?'block':'none';
   const bb=document.getElementById('bem-box'); if(bb&&!ztf)bb.style.display='none';
   if(typeof applySndBtn==='function')applySndBtn();
   const cog=document.getElementById('ztf-settings'); if(cog)cog.style.display=(ztf&&isZtfAuthor())?'':'none';
-  // ztf kanalında yalnızca yönetici paylaşım formunu görür
+  // ztf/notes kanalında yalnızca yönetici paylaşım formunu görür
   const comp=document.querySelector('#view-feed .compose');
-  if(comp)comp.style.display=(ztf&&!isZtfAuthor())?'none':'';
-  // ztf'de topluluk widget'ları gizlenir
-  const wt=document.getElementById('week-top'); if(wt&&ztf)wt.style.display='none';
-  const se=document.getElementById('senti');   if(se&&ztf)se.style.display='none';
-  const disc=document.querySelector('#view-feed .feed-disclaimer'); if(disc)disc.style.display=ztf?'none':'';
+  if(comp)comp.style.display=(ownerOnly&&!isZtfAuthor())?'none':'';
+  // bu kanallarda topluluk widget'ları gizlenir
+  const wt=document.getElementById('week-top'); if(wt&&ownerOnly)wt.style.display='none';
+  const se=document.getElementById('senti');   if(se&&ownerOnly)se.style.display='none';
+  const disc=document.querySelector('#view-feed .feed-disclaimer'); if(disc)disc.style.display=ownerOnly?'none':'';
+  // seans performansı notlar kanalında anlamsız (işlem değil, not)
+  const ss=document.getElementById('sesstats'); if(ss&&notes)ss.style.display='none';
+  // notlarda yön/hedef-stop alanları gereksiz
+  const bp=document.querySelector('#view-feed .bias-pick'); if(bp)bp.style.display=notes?'none':'';
+  const ctp=document.querySelector('#view-feed .c-tp');     if(ctp)ctp.style.display=notes?'none':'';
   // compose ipucu metnini kanala göre değiştir
   const ta=document.getElementById('c-text');
-  if(ta)ta.placeholder=ztf
-    ? "İşlem detayı... (örn. EUR/USD short · giriş 1.0850 · SL 1.0880 · TP 1.0790 · R: +2.0 · sebep: Londra seansı likidite süpürmesi)"
-    : "Analizini / bias'ını yaz... (örn. EUR/USD 1.0820 desteğinden 1.0910'a kadar yükseliş bekliyorum)";
+  if(ta)ta.placeholder=notes
+    ? "Bugün ne görüyorsun? Gün içi düşüncelerin, grafik okuman, kendine notların... (görsel ekleyebilirsin)"
+    : (ztf
+      ? "İşlem detayı... (örn. EUR/USD short · giriş 1.0850 · SL 1.0880 · TP 1.0790 · R: +2.0 · sebep: Londra seansı likidite süpürmesi)"
+      : "Analizini / bias'ını yaz... (örn. EUR/USD 1.0820 desteğinden 1.0910'a kadar yükseliş bekliyorum)");
+  const pb=document.getElementById('c-post'); if(pb)pb.textContent=notes?'Not ekle':'Paylaş';
 }
 function switchChannel(ch){
-  feedChannel=(ch==='ztf')?'ztf':'main';
+  feedChannel=(ch==='ztf'||ch==='notes')?ch:'main';
   feedFilter='all'; feedSym='all';
   document.querySelectorAll('.ff').forEach(x=>x.classList.toggle('active',x.dataset.f==='all'));
   try{localStorage.setItem('fxdesk_feed_channel',feedChannel);}catch(e){}
   renderFeed();
 }
 document.querySelectorAll('.ch-tab').forEach(b=>b.addEventListener('click',()=>switchChannel(b.dataset.ch)));
-try{const c=localStorage.getItem('fxdesk_feed_channel'); if(c==='ztf')feedChannel='ztf';}catch(e){}
+try{const c=localStorage.getItem('fxdesk_feed_channel'); if(c==='ztf'||c==='notes')feedChannel=c;}catch(e){}
 /* hesap ayarları (yalnızca yönetici) */
 const _ztfCog=document.getElementById('ztf-settings');
 if(_ztfCog)_ztfCog.addEventListener('click',()=>{
@@ -4010,7 +4032,9 @@ function renderFeed(){
   if(!items.length){
     list.innerHTML=ztf
       ? '<div class="ztf-empty">Bu hesapta henüz işlem paylaşılmadı.<br>'+(isZtfAuthor()?'Yukarıdaki formdan ilk işlemini ekleyebilirsin. ☝️':'Yeni işlem eklendikçe burada görünecek — her işleme yorum yazabilirsin. 💬')+'</div>'
-      : '<div class="feed-empty">Bu filtrede paylaşım yok. İlk paylaşımı sen yap! ☝️</div>';
+      : (feedChannel==='notes'
+        ? '<div class="ztf-empty">Henüz not eklenmedi.<br>'+(isZtfAuthor()?'Yukarıdaki formdan ilk notunu yazabilirsin. ☝️':'Yeni notlar eklendikçe burada görünecek — yorum yazabilirsin. 💬')+'</div>'
+        : '<div class="feed-empty">Bu filtrede paylaşım yok. İlk paylaşımı sen yap! ☝️</div>');
     return;
   }
   items.forEach(p=>{
@@ -4270,9 +4294,14 @@ document.getElementById('c-post').addEventListener('click',()=>{
   if(!target&&!stop){const g=parseTpSlFromText(text); if(g.target&&g.stop){target=g.target;stop=g.stop;}}
   const outcome=target?'open':null;   // hedef girildiyse "devam ediyor" olarak başlar
   // hangi kanala yazılacak: ztf yalnızca yöneticiye açık (sunucuda RLS de engeller)
-  const postCh=(feedChannel==='ztf'&&isZtfAuthor())?'ztf':'main';
-  if(feedChannel==='ztf'&&!isZtfAuthor()){alert('Zero to Funded kanalına yalnızca yönetici paylaşım yapabilir.');return;}
-  if(!sym&&!text&&!composeImgs.length){alert('Lütfen en az bir parite, analiz yazısı veya görsel ekle.');return;}
+  const ownerCh=(feedChannel==='ztf'||feedChannel==='notes');
+  const postCh=(ownerCh&&isZtfAuthor())?feedChannel:'main';
+  if(ownerCh&&!isZtfAuthor()){
+    alert((feedChannel==='notes'?'Günlük Notlar':'Zero to Funded')+' bölümüne yalnızca yönetici yazabilir.');return;
+  }
+  if(!sym&&!text&&!composeImgs.length){
+    alert(postCh==='notes'?'Lütfen bir not yaz veya görsel ekle.':'Lütfen en az bir parite, analiz yazısı veya görsel ekle.');return;
+  }
   const resetCompose=()=>{document.getElementById('c-sym').value='';document.getElementById('c-text').value='';document.getElementById('c-target').value='';document.getElementById('c-stop').value='';composeSym='';document.querySelectorAll('.spx').forEach(x=>x.classList.remove('sel'));clearComposeImgs();feedFilter='all';feedSym='all';document.querySelectorAll('.ff').forEach(x=>x.classList.toggle('active',x.dataset.f==='all'));};
   if(!DEMO){
     (async()=>{
