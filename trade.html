@@ -360,6 +360,29 @@
   .ztf-fill.neg{background:var(--red)}
   .ztf-plabel{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:5px;gap:8px}
   .ztf-empty{background:var(--panel);border:1px dashed var(--border);border-radius:var(--radius);padding:26px 18px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
+  /* ---- Seans performansı ---- */
+  .sesstats{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;margin-bottom:16px}
+  .sst-head{display:flex;align-items:center;gap:9px}
+  .sst-head b{font-size:13.5px}
+  .sst-sub{font-size:11.5px;color:var(--muted)}
+  .sst-tg{margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;font-family:inherit;padding:2px 6px;transition:.15s}
+  .sst-tg:hover{color:var(--text)}
+  .sst-tg.open{transform:rotate(180deg)}
+  .sst-body{display:none;margin-top:12px}
+  .sst-body.open{display:block}
+  .sst-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--border)}
+  .sst-row:first-child{border-top:none}
+  .sst-name{font-size:12.5px;font-weight:600}
+  .sst-meta{font-size:11px;color:var(--muted);margin-top:2px}
+  .sst-right{display:flex;align-items:center;gap:10px}
+  .sst-bar{width:92px;height:7px;background:var(--bg);border:1px solid var(--border);border-radius:20px;overflow:hidden;flex-shrink:0}
+  .sst-fill{height:100%;border-radius:20px;transition:width .4s}
+  .sst-fill.good{background:var(--green)} .sst-fill.mid{background:var(--gold)} .sst-fill.bad{background:var(--red)}
+  .sst-wr{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;min-width:46px;text-align:right}
+  .sst-wr.good{color:var(--green)} .sst-wr.mid{color:var(--gold)} .sst-wr.bad{color:var(--red)}
+  .sst-empty{font-size:12px;color:var(--muted);padding:6px 0}
+  .sst-best{margin-top:11px;padding-top:10px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);line-height:1.6}
+  .sst-best b{color:var(--text)}
   /* ---- BEM doğrulanmış veri paneli ---- */
   .bem-box{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:13px 15px;margin-top:14px}
   .bem-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px}
@@ -1653,6 +1676,16 @@
       <div class="ch-tabs" id="ch-tabs">
         <button class="ch-tab active" data-ch="main">📣 Topluluk</button>
         <button class="ch-tab" data-ch="ztf">🎯 Zero to Funded</button>
+      </div>
+
+      <!-- Seans bazlı performans (sonuçlanmış paylaşımlar) -->
+      <div id="sesstats" class="sesstats" style="display:none">
+        <div class="sst-head">
+          <b>🕐 Seans performansı</b>
+          <span class="sst-sub" id="sst-sub"></span>
+          <button id="sst-toggle" class="sst-tg" type="button" title="Aç/kapat">▾</button>
+        </div>
+        <div class="sst-body" id="sst-body"></div>
       </div>
 
       <!-- Zero to Funded başlığı + istatistik şeridi (yalnızca ztf kanalında) -->
@@ -3797,6 +3830,96 @@ setInterval(()=>{
 },120000);
 /* pencere yeniden boyutlanınca grafiği yeniden çiz (canvas ölçeklenmez) */
 window.addEventListener('resize',()=>{ if(feedChannel==='ztf'&&bemData)bemDrawChart(); });
+/* ===== SEANS PERFORMANSI =====
+   Sonuçlanmış (TP/SL) paylaşımları paylaşım saatine göre seanslara ayırır.
+   Seanslar İstanbul saatiyle ve ÇAKIŞMAYACAK şekilde atanır: Londra–NY
+   overlap ayrı bir kategori olduğu için bir işlem yalnızca tek seansa girer
+   (aksi halde aynı işlem iki kez sayılır ve toplam şişer). */
+const SES_BUCKETS=[
+  {key:'asia',  name:'🇯🇵 Asya (Tokyo)',      saat:'02:00–10:00', test:h=>h>=2&&h<10},
+  {key:'london',name:'🇬🇧 Londra',            saat:'10:00–15:00', test:h=>h>=10&&h<15},
+  {key:'ovl',   name:'⚡ Londra–NY Overlap',  saat:'15:00–19:00', test:h=>h>=15&&h<19},
+  {key:'ny',    name:'🇺🇸 New York',          saat:'19:00–24:00', test:h=>h>=19&&h<24},
+  {key:'off',   name:'🌙 Seans dışı',         saat:'00:00–02:00', test:h=>h>=0&&h<2}
+];
+/* Bir zaman damgasını İstanbul saatine çevirip saat (ondalık) döndürür */
+function istHour(ts){
+  try{
+    const d=new Date(ts);
+    const ist=new Date(d.toLocaleString('en-US',{timeZone:'Europe/Istanbul'}));
+    return ist.getHours()+ist.getMinutes()/60;
+  }catch(e){ return null; }
+}
+function sesOf(ts){
+  const h=istHour(ts); if(h==null)return null;
+  const b=SES_BUCKETS.find(x=>x.test(h));
+  return b?b.key:'off';
+}
+/* Aktif kanaldaki sonuçlanmış paylaşımlardan seans istatistiği çıkarır */
+function sesStats(){
+  const rows=feed.filter(p=>chOf(p)===feedChannel&&(p.outcome==='hit'||p.outcome==='miss'));
+  const agg={}; SES_BUCKETS.forEach(b=>agg[b.key]={tp:0,sl:0});
+  rows.forEach(p=>{
+    const k=sesOf(p.ts); if(!k||!agg[k])return;
+    if(p.outcome==='hit')agg[k].tp++; else agg[k].sl++;
+  });
+  return {agg,total:rows.length,open:feed.filter(p=>chOf(p)===feedChannel&&p.outcome==='open').length};
+}
+function renderSesStats(){
+  const box=document.getElementById('sesstats'); if(!box)return;
+  const {agg,total,open}=sesStats();
+  const sub=document.getElementById('sst-sub');
+  const body=document.getElementById('sst-body');
+  if(!total){
+    box.style.display=open?'block':'none';
+    if(sub)sub.textContent=open?('· '+open+' paylaşım sonuç bekliyor'):'';
+    if(body)body.innerHTML='<div class="sst-empty">Henüz sonuçlanmış paylaşım yok. TP/SL işaretlendikçe burada birikir.</div>';
+    return;
+  }
+  box.style.display='block';
+  const tpAll=SES_BUCKETS.reduce((s,b)=>s+agg[b.key].tp,0);
+  if(sub)sub.textContent='· '+total+' sonuçlanmış · genel isabet %'+Math.round(tpAll/total*100)+(open?' · '+open+' devam ediyor':'');
+  const cls=wr=>wr>=60?'good':(wr>=40?'mid':'bad');
+  let html='';
+  SES_BUCKETS.forEach(b=>{
+    const a=agg[b.key], n=a.tp+a.sl;
+    if(!n)return;                                  // hiç işlem yoksa satırı gösterme
+    const wr=Math.round(a.tp/n*100), c=cls(wr);
+    html+='<div class="sst-row">'+
+      '<div><div class="sst-name">'+b.name+'</div>'+
+        '<div class="sst-meta">'+b.saat+' · '+n+' işlem · '+a.tp+' TP / '+a.sl+' SL</div></div>'+
+      '<div class="sst-right">'+
+        '<div class="sst-bar"><div class="sst-fill '+c+'" style="width:'+wr+'%"></div></div>'+
+        '<div class="sst-wr '+c+'">%'+wr+'</div>'+
+      '</div></div>';
+  });
+  // en iyi / en kötü seans (en az 2 işlem olanlar arasında)
+  const cand=SES_BUCKETS.map(b=>{const a=agg[b.key],n=a.tp+a.sl;return n>=2?{name:b.name,n,wr:a.tp/n*100}:null;}).filter(Boolean);
+  if(cand.length>=2){
+    const best=cand.reduce((x,y)=>y.wr>x.wr?y:x), worst=cand.reduce((x,y)=>y.wr<x.wr?y:x);
+    if(best.name!==worst.name){
+      html+='<div class="sst-best">✅ En verimli: <b>'+best.name+'</b> (%'+Math.round(best.wr)+' · '+best.n+' işlem)'+
+            '<br>⚠️ En zayıf: <b>'+worst.name+'</b> (%'+Math.round(worst.wr)+' · '+worst.n+' işlem)</div>';
+    }
+  }
+  if(body)body.innerHTML=html||'<div class="sst-empty">Bu kanalda sonuçlanmış paylaşım yok.</div>';
+}
+/* aç/kapa — tercih hatırlanır */
+function bindSesStats(){
+  const t=document.getElementById('sst-toggle'), b=document.getElementById('sst-body');
+  if(!t||!b||t._bound)return; t._bound=true;
+  const open=localStorage.getItem('fxdesk_sst_open')==='1';
+  if(open){b.classList.add('open');t.classList.add('open');}
+  t.addEventListener('click',()=>{
+    const on=b.classList.toggle('open');
+    t.classList.toggle('open',on);
+    try{localStorage.setItem('fxdesk_sst_open',on?'1':'0');}catch(e){}
+  });
+  const hd=document.querySelector('.sst-head');
+  if(hd)hd.addEventListener('click',e=>{ if(e.target!==t)t.click(); });
+}
+bindSesStats();
+
 function renderZtf(){
   const cfg=ztfCfg();
   const sub=document.getElementById('ztf-sub');
@@ -3878,6 +4001,7 @@ function renderFeed(){
   applyChannelUI();
   const ztf=feedChannel==='ztf';
   if(ztf)renderZtf(); else {renderWeekTop();renderSentiment();}
+  renderSesStats();
   renderSymFilter();
   refreshAvatars();
   const list=document.getElementById('feed-list');
