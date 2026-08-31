@@ -3885,6 +3885,8 @@ function sesStats(){
 }
 function renderSesStats(){
   const box=document.getElementById('sesstats'); if(!box)return;
+  // Notlar filtresindeyken seans performansı anlamsız (not işlem değil)
+  if(isNotesFilter()){box.style.display='none';return;}
   const {agg,total,open}=sesStats();
   const sub=document.getElementById('sst-sub');
   const body=document.getElementById('sst-body');
@@ -3978,23 +3980,23 @@ function applyChannelUI(){
   const ztf=feedChannel==='ztf';
   const notes=(composeSym===NOT_SYM)||isNotesFilter();   // not yazıyor ya da not filtresi açık
   document.querySelectorAll('.ch-tab').forEach(b=>b.classList.toggle('active',b.dataset.ch===feedChannel));
-  const hd=document.getElementById('ztf-head'); if(hd)hd.style.display=ztf?'block':'none';
-  const nh=document.getElementById('notes-head'); if(nh)nh.style.display=(!ztf&&isNotesFilter())?'block':'none';
+  // ztf başlığı: not filtresi açıkken gizlenir (notlar işlem değil)
+  const hd=document.getElementById('ztf-head'); if(hd)hd.style.display=(ztf&&!isNotesFilter())?'block':'none';
+  const nh=document.getElementById('notes-head'); if(nh)nh.style.display=isNotesFilter()?'block':'none';
   const bb=document.getElementById('bem-box'); if(bb&&!ztf)bb.style.display='none';
   if(typeof applySndBtn==='function')applySndBtn();
   const cog=document.getElementById('ztf-settings'); if(cog)cog.style.display=(ztf&&isZtfAuthor())?'':'none';
   // ztf kanalında yalnızca yönetici paylaşım formunu görür
   const comp=document.querySelector('#view-feed .compose');
   if(comp)comp.style.display=(ztf&&!isZtfAuthor())?'none':'';
-  // "📓 Not" seçeneği yalnızca yöneticide görünür (topluluk kanalında)
+  // "📓 Not" seçeneği yalnızca yöneticide görünür (her iki kanalda da)
   const notBtn=document.getElementById('spx-not');
-  if(notBtn)notBtn.style.display=(!ztf&&isZtfAuthor())?'':'none';
+  if(notBtn)notBtn.style.display=isZtfAuthor()?'':'none';
   // ztf'de topluluk widget'ları gizlenir
   const wt=document.getElementById('week-top'); if(wt&&ztf)wt.style.display='none';
   const se=document.getElementById('senti');   if(se&&ztf)se.style.display='none';
   const disc=document.querySelector('#view-feed .feed-disclaimer'); if(disc)disc.style.display=ztf?'none':'';
-  // not filtresindeyken seans performansı anlamsız (işlem değil)
-  const ss=document.getElementById('sesstats'); if(ss&&!ztf&&isNotesFilter())ss.style.display='none';
+  // (seans paneli gizleme renderSesStats içinde yapılır — sonradan ezilmesin diye)
   // not yazarken yön/hedef-stop alanları gereksiz
   const bp=document.querySelector('#view-feed .bias-pick'); if(bp)bp.style.display=(composeSym===NOT_SYM)?'none':'';
   const ctp=document.querySelector('#view-feed .c-tp');     if(ctp)ctp.style.display=(composeSym===NOT_SYM)?'none':'';
@@ -4039,10 +4041,11 @@ function renderFeed(){
   const items=feed.filter(p=>chOf(p)===feedChannel&&(feedFilter==='all'||p.bias===feedFilter)&&(feedSym==='all'||postHasSym(p,feedSym))&&!hidden.has(p.id)).sort((a,b)=>b.ts-a.ts);
   list.innerHTML='';
   if(!items.length){
-    list.innerHTML=ztf
-      ? '<div class="ztf-empty">Bu hesapta henüz işlem paylaşılmadı.<br>'+(isZtfAuthor()?'Yukarıdaki formdan ilk işlemini ekleyebilirsin. ☝️':'Yeni işlem eklendikçe burada görünecek — her işleme yorum yazabilirsin. 💬')+'</div>'
-      : (isNotesFilter()
-        ? '<div class="ztf-empty">Henüz not eklenmedi.<br>'+(isZtfAuthor()?'📓 Not seçip ilk notunu yazabilirsin. ☝️':'Yeni notlar eklendikçe burada görünecek — yorum yazabilirsin. 💬')+'</div>'
+    // not filtresi her iki kanalda da öncelikli (kanal mesajı yanıltmasın)
+    list.innerHTML=isNotesFilter()
+      ? '<div class="ztf-empty">Henüz not eklenmedi.<br>'+(isZtfAuthor()?'📓 Not seçip ilk notunu yazabilirsin. ☝️':'Yeni notlar eklendikçe burada görünecek — yorum yazabilirsin. 💬')+'</div>'
+      : (ztf
+        ? '<div class="ztf-empty">Bu hesapta henüz işlem paylaşılmadı.<br>'+(isZtfAuthor()?'Yukarıdaki formdan ilk işlemini ekleyebilirsin. ☝️':'Yeni işlem eklendikçe burada görünecek — her işleme yorum yazabilirsin. 💬')+'</div>'
         : '<div class="feed-empty">Bu filtrede paylaşım yok. İlk paylaşımı sen yap! ☝️</div>');
     return;
   }
