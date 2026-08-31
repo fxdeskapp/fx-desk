@@ -3500,6 +3500,22 @@ function sndAudio(){
   if(!_sndAudio){ _sndAudio=new Audio(SND_URL); _sndAudio.preload='auto'; }
   return _sndAudio;
 }
+/* Otomatik oynatma kilidi: tarayıcılar kullanıcı sayfayla etkileşime girmeden
+   ses çalmayı engeller. İlk tıklama/tuş vuruşunda sesi sessizce bir kez
+   çalıp durdurarak kilidi açarız — sonraki gerçek çalmalar engellenmez. */
+let _sndUnlocked=false;
+function sndUnlock(){
+  if(_sndUnlocked)return; _sndUnlocked=true;
+  try{
+    const a=sndAudio(); const v=a.volume;
+    a.volume=0;
+    const p=a.play();
+    const done=()=>{ try{a.pause();a.currentTime=0;a.volume=v;}catch(e){} };
+    if(p&&p.then)p.then(done).catch(()=>{a.volume=v;}); else done();
+  }catch(e){}
+}
+['click','keydown','touchstart'].forEach(ev=>
+  document.addEventListener(ev,sndUnlock,{once:true,capture:true}));
 function sndToast(name){
   let t=document.getElementById('snd-toast');
   if(!t){t=document.createElement('div');t.id='snd-toast';t.className='snd-toast';document.body.appendChild(t);}
@@ -3509,36 +3525,66 @@ function sndToast(name){
 }
 function sndPlay(name){
   const a=sndAudio();
-  try{ a.currentTime=0; const p=a.play(); if(p&&p.catch)p.catch(()=>{}); }catch(e){}
+  try{
+    a.currentTime=0;
+    const p=a.play();
+    // Tarayıcı otomatik oynatmayı engellerse toast yine görünür; kullanıcı
+    // sayfaya bir kez tıkladığında ses açılır (aşağıdaki tek seferlik kilit açma).
+    if(p&&p.catch)p.catch(err=>console.warn('ses engellendi:',err&&err.name));
+  }catch(e){}
   sndToast(name);
   const b=document.getElementById('snd-blast');
   if(b){ b.classList.add('playing'); clearTimeout(b._h); b._h=setTimeout(()=>b.classList.remove('playing'),5000); }
 }
-/* Realtime: yeni ses olaylarını dinle */
+/* Yeni ses olaylarını yakala.
+   Not: Bu projede Supabase Realtime (WebSocket) kullanılamıyor — uç nokta 500
+   veriyor ve abonelik TIMED_OUT oluyor. Bu yüzden kısa aralıklı yoklama
+   kullanılıyor (uygulamanın başka yerlerinde de bu desen var, güvenilir).
+   Sorgu çok hafif: yalnızca son kaydın id/zamanı çekilir. */
+let _sndLastId=null, _sndPollBusy=false;
+async function sndPoll(){
+  if(DEMO||!sb||!currentUser||_sndPollBusy)return;
+  _sndPollBusy=true;
+  try{
+    const {data,error}=await sb.from('sound_blasts')
+      .select('id,username,created_at').order('created_at',{ascending:false}).limit(1);
+    if(error||!data||!data.length)return;
+    const r=data[0];
+    // ilk turda mevcut son kaydı "görüldü" say → açılışta eski ses çalmaz
+    if(_sndLastId===null){ _sndLastId=r.id; return; }
+    if(r.id===_sndLastId)return;
+    _sndLastId=r.id;
+    if(_sndSeen.has(r.id))return; _sndSeen.add(r.id);
+    if(r.created_at && Date.now()-new Date(r.created_at).getTime()>5*60000)return; // 5 dk'dan eskiyse çalma
+    sndPlay(r.username);
+  }catch(e){}
+  finally{ _sndPollBusy=false; }
+}
 function sndSubscribe(){
   if(DEMO||!sb||_sndSub)return;
-  try{
-    _sndSub=sb.channel('sound-blasts')
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'sound_blasts'},payload=>{
-        const r=payload&&payload.new; if(!r||!r.id)return;
-        if(_sndSeen.has(r.id))return; _sndSeen.add(r.id);
-        // çok eski olayları çalma (sekme uzun süre kapalıysa)
-        if(r.created_at && Date.now()-new Date(r.created_at).getTime()>60000)return;
-        sndPlay(r.username);
-      })
-      .subscribe();
-  }catch(e){ console.warn('ses aboneliği',e); }
+  _sndSub=true;
+  sndPoll();                    // baz noktasını hemen kur
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible')sndPoll();
+  });
 }
+/* Yoklama tek bir çağrı noktasına (showApp) bağlı kalmasın: zamanlayıcı her
+   koşulda çalışır, currentUser gelene kadar sndPoll kendisi sessizce çıkar.
+   Böylece oturum geri yüklenmesi / geç giriş gibi durumlarda da devreye girer. */
+setInterval(()=>{ if(!DEMO&&sb&&currentUser){ if(!_sndSub)sndSubscribe(); else sndPoll(); } },5000);
 /* Yönetici tetikler */
 async function sndBlast(){
   if(!currentUser||!currentUser.isAdmin||_sndBusy)return;
   const b=document.getElementById('snd-blast');
   _sndBusy=true; if(b)b.disabled=true;
   try{
-    sndPlay(currentUser.username);      // kendinde hemen çal (realtime'ı bekleme)
-    const {error}=await sb.from('sound_blasts')
-      .insert({sound:'alirim',fired_by:currentUser.id,username:currentUser.username});
-    if(error)console.warn('ses yayını',error);
+    sndPlay(currentUser.username);      // kendinde hemen çal (yoklamayı bekleme)
+    const {data,error}=await sb.from('sound_blasts')
+      .insert({sound:'alirim',fired_by:currentUser.id,username:currentUser.username})
+      .select('id').maybeSingle();
+    if(error){console.warn('ses yayını',error);}
+    // kendi kaydımızı "görüldü" işaretle → yoklama aynı sesi tekrar çalmasın
+    else if(data&&data.id){ _sndLastId=data.id; _sndSeen.add(data.id); }
   }catch(e){console.warn(e);}
   finally{ setTimeout(()=>{_sndBusy=false; if(b)b.disabled=false;},3000); }   // spam koruması
 }
