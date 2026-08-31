@@ -326,6 +326,17 @@
   .ap-toggle:hover{color:var(--text)}
   .ap-toggle.on{background:var(--green);border-color:var(--green);color:#fff}
   .ap-toggle.blocked{background:var(--panel-2);border-color:var(--red);color:var(--red)}
+  /* ses yayın düğmesi (yalnızca yönetici) */
+  .snd-blast{background:var(--panel-2);border:1px solid var(--gold);color:var(--gold);padding:6px 13px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.12s;white-space:nowrap}
+  .snd-blast:hover{background:var(--gold);color:#000}
+  .snd-blast:disabled{opacity:.5;cursor:default}
+  .snd-blast.playing{background:var(--gold);color:#000;animation:sndPulse .6s ease-in-out infinite alternate}
+  @keyframes sndPulse{from{transform:scale(1)}to{transform:scale(1.06)}}
+  /* çalarken herkeste görünen bildirim */
+  .snd-toast{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:9999;background:var(--panel);
+    border:1px solid var(--gold);border-radius:22px;padding:9px 18px;font-size:13px;font-weight:700;color:var(--gold);
+    box-shadow:var(--shadow-lg);display:none;align-items:center;gap:8px}
+  .snd-toast.on{display:flex}
   /* ---- Kanal sekmeleri (Topluluk / Zero to Funded) ---- */
   .ch-tabs{display:flex;gap:8px;margin:0 0 16px;border-bottom:1px solid var(--border);padding-bottom:0}
   .ch-tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:9px 4px;margin-bottom:-1px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:.12s}
@@ -1635,6 +1646,7 @@
           <button class="ff" data-f="neutral">Nötr</button>
         </div>
         <button id="ap-toggle" class="ap-toggle" type="button" title="Yönetici paylaşım bildirimi">🔔 Bildirim</button>
+        <button id="snd-blast" class="snd-blast" type="button" title="Sesi herkeste çal" style="display:none">📢 ALIRIM</button>
       </div>
 
       <!-- kanal sekmeleri: topluluk akışı / Zero to Funded -->
@@ -3476,6 +3488,67 @@ async function markViewed(id){
   }catch(e){}
 }
 
+/* ===== SES YAYINI (yalnızca yönetici tetikler, herkeste çalar) =====
+   Yönetici düğmeye basınca sound_blasts'a kayıt düşer; Supabase Realtime
+   ile o an sitede olan herkese ulaşır ve ses çalar.
+   Not: tarayıcılar kullanıcı etkileşimi olmadan ses çalmayı engelleyebilir —
+   sayfada bir kez tıklanmışsa sorun olmaz, olmazsa sessizce geçilir. */
+const SND_URL='ses/alirim.mp3';
+const SND_LABEL='ALIRIM';
+let _sndAudio=null, _sndSub=null, _sndBusy=false, _sndSeen=new Set();
+function sndAudio(){
+  if(!_sndAudio){ _sndAudio=new Audio(SND_URL); _sndAudio.preload='auto'; }
+  return _sndAudio;
+}
+function sndToast(name){
+  let t=document.getElementById('snd-toast');
+  if(!t){t=document.createElement('div');t.id='snd-toast';t.className='snd-toast';document.body.appendChild(t);}
+  t.textContent='🔊 '+(name?esc(name)+' sesi çaldı':'Ses çalıyor');
+  t.classList.add('on'); clearTimeout(t._h);
+  t._h=setTimeout(()=>t.classList.remove('on'),6000);
+}
+function sndPlay(name){
+  const a=sndAudio();
+  try{ a.currentTime=0; const p=a.play(); if(p&&p.catch)p.catch(()=>{}); }catch(e){}
+  sndToast(name);
+  const b=document.getElementById('snd-blast');
+  if(b){ b.classList.add('playing'); clearTimeout(b._h); b._h=setTimeout(()=>b.classList.remove('playing'),5000); }
+}
+/* Realtime: yeni ses olaylarını dinle */
+function sndSubscribe(){
+  if(DEMO||!sb||_sndSub)return;
+  try{
+    _sndSub=sb.channel('sound-blasts')
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'sound_blasts'},payload=>{
+        const r=payload&&payload.new; if(!r||!r.id)return;
+        if(_sndSeen.has(r.id))return; _sndSeen.add(r.id);
+        // çok eski olayları çalma (sekme uzun süre kapalıysa)
+        if(r.created_at && Date.now()-new Date(r.created_at).getTime()>60000)return;
+        sndPlay(r.username);
+      })
+      .subscribe();
+  }catch(e){ console.warn('ses aboneliği',e); }
+}
+/* Yönetici tetikler */
+async function sndBlast(){
+  if(!currentUser||!currentUser.isAdmin||_sndBusy)return;
+  const b=document.getElementById('snd-blast');
+  _sndBusy=true; if(b)b.disabled=true;
+  try{
+    sndPlay(currentUser.username);      // kendinde hemen çal (realtime'ı bekleme)
+    const {error}=await sb.from('sound_blasts')
+      .insert({sound:'alirim',fired_by:currentUser.id,username:currentUser.username});
+    if(error)console.warn('ses yayını',error);
+  }catch(e){console.warn(e);}
+  finally{ setTimeout(()=>{_sndBusy=false; if(b)b.disabled=false;},3000); }   // spam koruması
+}
+function applySndBtn(){
+  const b=document.getElementById('snd-blast'); if(!b)return;
+  b.style.display=(currentUser&&currentUser.isAdmin&&!DEMO)?'':'none';
+  b.textContent='📢 '+SND_LABEL;
+  if(!b._bound){ b._bound=true; b.addEventListener('click',sndBlast); }
+}
+
 /* ===== YORUMDA GÖRSEL ===== */
 let cmImgs={};   // post_id -> [dataURL]
 const CM_MAX=2;
@@ -3719,6 +3792,7 @@ function applyChannelUI(){
   document.querySelectorAll('.ch-tab').forEach(b=>b.classList.toggle('active',b.dataset.ch===feedChannel));
   const hd=document.getElementById('ztf-head'); if(hd)hd.style.display=ztf?'block':'none';
   const bb=document.getElementById('bem-box'); if(bb&&!ztf)bb.style.display='none';
+  if(typeof applySndBtn==='function')applySndBtn();
   const cog=document.getElementById('ztf-settings'); if(cog)cog.style.display=(ztf&&isZtfAuthor())?'':'none';
   // ztf kanalında yalnızca yönetici paylaşım formunu görür
   const comp=document.querySelector('#view-feed .compose');
@@ -6367,6 +6441,9 @@ function applySessBox(){
 }
 function updateSessStrip(){
   const box=document.getElementById('sessstrip'); if(!box)return;
+  // tickCalendar bu fonksiyonu script tam yüklenmeden çağırabiliyor; FX_SESSIONS
+  // (const) o an henüz TDZ'de olur. typeof bile hata fırlattığı için try ile bak.
+  try{ FX_SESSIONS.length; }catch(e){ return; }   // henüz hazır değil, sonraki tick'te çalışır
   const ist=new Date(new Date().toLocaleString('en-US',{timeZone:'Europe/Istanbul'}));
   const h=ist.getHours()+ist.getMinutes()/60+ist.getSeconds()/3600;
   const fmt=x=>{const tot=Math.max(0,Math.round(x*3600));const hh=Math.floor(tot/3600),mm=Math.floor(tot%3600/60);return (hh>0?hh+'sa ':'')+String(mm).padStart(2,'0')+'dk';};
@@ -6534,6 +6611,8 @@ function showApp(){
   if(!_loginCounted){_loginCounted=true;recordLogin(currentUser);}
   ensureProfileRow();
   pingPresence();
+  if(typeof applySndBtn==='function')applySndBtn();           // ses düğmesi (yalnızca yönetici)
+  if(typeof sndSubscribe==='function')sndSubscribe();         // ses yayınını dinle
   if(typeof renderChecklist==='function')renderChecklist();   // kullanıcıya özel kontrol listesi
   let _t=(location.hash||'').replace('#','');
   if(!['trade','calendar','feed','journal','notebook','admin','settings','beta','stats'].includes(_t))_t='trade';
