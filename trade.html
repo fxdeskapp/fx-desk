@@ -1759,10 +1759,12 @@
           <input id="c-sym" class="sp-other" placeholder="diğer..." autocomplete="off" />
         </div>
         <textarea id="c-text" class="c-area" placeholder="Analizini / bias'ını yaz... (örn. EUR/USD 1.0820 desteğinden 1.0910'a kadar yükseliş bekliyorum)"></textarea>
-        <div class="c-tp" title="TP ve SL girersen sonuç OTOMATİK işaretlenir: fiyat TP'ye değerse 🎯 TP, SL'e değerse 🛑 SL (5 dk'da bir kontrol edilir). Metinde 'TP: / SL:' yazarsan da otomatik algılanır.">
-          <span class="c-tp-lbl">🎯 Sonuç takibi — otomatik 🤖 (opsiyonel):</span>
-          <input id="c-target" class="c-tp-in" placeholder="Hedef fiyat" autocomplete="off">
-          <input id="c-stop" class="c-tp-in" placeholder="Stop fiyat" autocomplete="off">
+        <!-- Hedef/Stop alanları kaldırıldı: sonuç, paylaşımın altındaki
+             🎯 TP / 🛑 SL / ⏳ Devam düğmeleriyle elle işaretlenir.
+             Alanlar gizli tutulur (mevcut kod bu elemanlara başvuruyor). -->
+        <div class="c-tp" style="display:none">
+          <input id="c-target" class="c-tp-in" autocomplete="off">
+          <input id="c-stop" class="c-tp-in" autocomplete="off">
         </div>
         <div class="compose-foot">
           <label class="upload">📎 Ekran görüntüsü ekle (3'e kadar)
@@ -3449,12 +3451,13 @@ function outcomeBadge(p){
   const auto=p.outcomeAuto?' title="Fiyat verisiyle otomatik işaretlendi 🤖"':'';
   if(p.outcome==='hit')return '<span class="oc-badge hit"'+auto+'>🎯 TP'+(p.outcomeAuto?' 🤖':'')+'</span>';
   if(p.outcome==='miss')return '<span class="oc-badge miss"'+auto+'>🛑 SL'+(p.outcomeAuto?' 🤖':'')+'</span>';
-  if(p.outcome==='open'||(p.target&&!p.outcome))return '<span class="oc-badge open" title="Hedef/stop girildi — fiyat TP veya SL\'e değince otomatik işaretlenecek">⏳ Devam ediyor</span>';
+  if(p.outcome==='open')return '<span class="oc-badge open" title="İşlem devam ediyor">⏳ Devam ediyor</span>';
   return '';
 }
 async function setOutcome(id,oc){
   const p=feed.find(x=>x.id===id); if(!p)return;
   if(!currentUser||p.uid!==currentUser.id)return;   // yalnız sahibi
+  if(p.outcome===oc)oc=null;                        // aynı düğmeye tekrar basınca işareti kaldır
   const prev=p.outcome; p.outcome=oc; p.outcomeAuto=false;   // manuel işaret otomatiği geçersiz kılar
   if(!DEMO){
     let error=null;
@@ -3999,7 +4002,7 @@ function applyChannelUI(){
   // (seans paneli gizleme renderSesStats içinde yapılır — sonradan ezilmesin diye)
   // not yazarken yön/hedef-stop alanları gereksiz
   const bp=document.querySelector('#view-feed .bias-pick'); if(bp)bp.style.display=(composeSym===NOT_SYM)?'none':'';
-  const ctp=document.querySelector('#view-feed .c-tp');     if(ctp)ctp.style.display=(composeSym===NOT_SYM)?'none':'';
+  // (Hedef/Stop alanları artık her zaman gizli — sonuç düğmelerle işaretlenir)
   // compose ipucu metni
   const ta=document.getElementById('c-text');
   if(ta)ta.placeholder=(composeSym===NOT_SYM)
@@ -4087,10 +4090,10 @@ function renderFeed(){
         ${canDel?`<span class="del-btn" title="${currentUser.isAdmin?'Yönetici: paylaşımı sil':'Paylaşımını sil'}">🗑 Sil</span>`:''}
       </div>
       ${canSeeViews()?`<div class="pv-list">${viewersHTML(p.id)}</div>`:''}
-      ${(canEdit&&(p.target||p.outcome))?`<div class="post-outcome">Sonuç:
+      ${(canEdit&&feedSymKey(p.symbol)!==NOT_SYM)?`<div class="post-outcome">Sonuç:
         <button class="oc-btn oc-hit${p.outcome==='hit'?' on':''}" data-oc="hit">🎯 TP</button>
         <button class="oc-btn oc-miss${p.outcome==='miss'?' on':''}" data-oc="miss">🛑 SL</button>
-        <button class="oc-btn oc-open${p.outcome==='open'||!p.outcome?' on':''}" data-oc="open">⏳ Devam</button>
+        <button class="oc-btn oc-open${p.outcome==='open'?' on':''}" data-oc="open">⏳ Devam</button>
       </div>`:''}
       <div class="comments ${(openComments.has(p.id)||feedChannel==='ztf')?'open':''}">
         ${p.comments.map((c,ci)=>{const ownC=currentUser&&c.uid&&c.uid===currentUser.id;const canDelC=currentUser&&(ownC||currentUser.isAdmin);return `<div class="comment" data-ci="${ci}">${avatarBox(c.uid,c.name,'avatar')}<div class="cm-body"><div class="cmname">${esc(c.name)} <span style="color:var(--muted);font-weight:400;font-size:11px">· ${timeAgo(c.ts)}${c.edited?' · <span class="edited-tag">düzenlendi</span>':''}</span>${(ownC||canDelC)?`<span class="cm-acts">${ownC?'<b class="cm-edit" title="Düzenle">✏️</b>':''}${canDelC?'<b class="cm-del" title="Sil">🗑</b>':''}</span>`:''}</div><div class="cmtext">${esc(c.text)}</div>${cmImgsHTML(c)}</div></div>`;}).join('')}
@@ -4304,11 +4307,9 @@ document.getElementById('c-post').addEventListener('click',()=>{
   if(!currentUser){showGate();return;}
   const sym=document.getElementById('c-sym').value.trim()||composeSym;
   const text=document.getElementById('c-text').value.trim();
-  let target=(document.getElementById('c-target').value||'').trim();
-  let stop=(document.getElementById('c-stop').value||'').trim();
-  // alanlar boşsa metindeki TP/SL'i otomatik çek (şablonla uyumlu) — ikisi de bulunursa kullan
-  if(!target&&!stop){const g=parseTpSlFromText(text); if(g.target&&g.stop){target=g.target;stop=g.stop;}}
-  const outcome=target?'open':null;   // hedef girildiyse "devam ediyor" olarak başlar
+  // Hedef/Stop artık paylaşımda girilmiyor; sonuç, paylaşımın altındaki
+  // 🎯 TP / 🛑 SL / ⏳ Devam düğmeleriyle elle işaretlenir.
+  const target='', stop='', outcome=null;
   // hangi kanala yazılacak: ztf yalnızca yöneticiye açık (sunucuda RLS de engeller)
   const postCh=(feedChannel==='ztf'&&isZtfAuthor())?'ztf':'main';
   if(feedChannel==='ztf'&&!isZtfAuthor()){alert('Zero to Funded kanalına yalnızca yönetici paylaşım yapabilir.');return;}
